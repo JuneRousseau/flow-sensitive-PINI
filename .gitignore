@@ -1,0 +1,17 @@
+/.Makefile.coq.d
+/Makefile.coq
+*.conf
+*.vos
+/_opam/
+*.aux
+*.vo
+*.vok
+*.glob
+/report/.auctex-auto/
+*.bbl
+*.blg
+*.fdb_latexmk
+*.fls
+*.log
+*.out
+/report/project_report.pdf
