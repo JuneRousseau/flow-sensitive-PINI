@@ -1,3 +1,4 @@
+(** From https://github.com/logsem/cerise/blob/main/theories/map_simpl.v *)
 From stdpp Require Import gmap.
 From Equations Require Import Equations.
 Require Import ssreflect.

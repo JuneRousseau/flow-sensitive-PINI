@@ -1,3 +1,10 @@
 -Q theories/ fspini
 theories/map_simpl.v
-theories/main.v
+
+theories/lang.v
+theories/types.v
+theories/security.v
+theories/augmented.v
+theories/soundness.v
+
+theories/examples.v
