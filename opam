@@ -6,4 +6,5 @@ authors: [ "anonymous" ]
 depends: [
   "coq"
   "coq-stdpp"
+  "coq-equations"
 ]

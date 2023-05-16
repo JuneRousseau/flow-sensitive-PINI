@@ -6,7 +6,9 @@ system for Progress-Insensitive Non-Interference (PINI)
 # Coq artifact
 
 Dependencies:
-- coq (= 8.16.1)
+- coq
+- coq-stdpp
+- coq-equations
 
 Build the artifact with `make`.
 
