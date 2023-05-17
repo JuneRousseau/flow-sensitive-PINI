@@ -28,6 +28,7 @@ Inductive command :=
 | CWhile : expr -> command -> command
 | CInput : channel -> var -> command
 | COutput : channel -> expr -> command
+| CJoin : command
 .
 
 Coercion ELit: value >-> expr.
