@@ -10,74 +10,80 @@ From fspini Require Import
   security
   map_simpl.
 
+
+
 (* Attempt at defining a statement that intertwines execution and typechecking *)
-Inductive exec_with_gamma : config -> context -> confidentiality -> config -> context -> confidentiality -> Prop :=
-| GSkip : forall S P m t Γ pc,
+Inductive exec_with_gamma : config -> context -> list confidentiality -> config -> context -> list confidentiality -> Prop :=
+| GSkip : forall S P m t Γ ls,
   exec_with_gamma
-      ( Some SKIP, S, P, m, t) Γ pc
-      ( None, S, P, m, t) Γ pc
+      ( Some SKIP, S, P, m, t) Γ ls
+      ( None, S, P, m, t) Γ ls
 
-| GAssign : forall S P m t x e v l Γ pc Γ',
+| GAssign : forall S P m t x e v l Γ ls Γ',
   e ; m ⇓ v ->
   {{ Γ ⊢ e : l }} ->
-  Γ' = <[ x := l ⊔ pc ]> Γ ->
+  Γ' = <[ x := fold_left join ls l ]> Γ ->
   exec_with_gamma
-    ( Some (x ::= e), S, P, m, t ) Γ pc
-    ( None, S, P, <[ x := v ]> m, t) Γ' pc
+    ( Some (x ::= e), S, P, m, t ) Γ ls
+    ( None, S, P, <[ x := v ]> m, t) Γ' ls
 
-| GSeq1 : forall S P m t c1 c2 Γ pc S' P' m' t' c1' Γ' pc',
+| GSeq1 : forall S P m t c1 c2 Γ ls S' P' m' t' c1' Γ' ls',
     exec_with_gamma
-      ( Some c1, S, P, m, t) Γ pc
-      ( Some c1', S', P', m', t') Γ' pc'
+      ( Some c1, S, P, m, t) Γ ls
+      ( Some c1', S', P', m', t') Γ' ls'
     ->
     exec_with_gamma
-      ( Some (c1 ;;; c2), S, P, m, t ) Γ pc
-      ( Some (c1' ;;; c2), S', P', m', t' ) Γ' pc' (* Should this last one be pc? pc'? *)
+      ( Some (c1 ;;; c2), S, P, m, t ) Γ ls
+      ( Some (c1' ;;; c2), S', P', m', t' ) Γ' ls'
 
-| GSeq2 : forall S P m t c1 c2 Γ pc S' P' m' t' Γ' pc' ,
+| GSeq2 : forall S P m t c1 c2 Γ ls S' P' m' t' Γ' ls' ,
     exec_with_gamma
-      ( Some c1, S, P, m , t ) Γ pc
-      ( None, S', P', m', t' ) Γ' pc'
+      ( Some c1, S, P, m , t ) Γ ls
+      ( None, S', P', m', t' ) Γ' ls'
     ->
     exec_with_gamma
-      ( Some (c1 ;;; c2), S, P, m, t ) Γ pc
-      ( Some c2, S', P', m', t') Γ' pc'
-      (* This should not be pc', since we are done with c1 and should revert to what we had before *)
+      ( Some (c1 ;;; c2), S, P, m, t ) Γ ls
+      ( Some c2, S', P', m', t') Γ' ls'
 
-| GIf : forall S P m t (c1 c2 : command) e v l Γ pc,
+| GIf : forall S P m t (c1 c2 : command) e v l Γ ls,
   e ; m ⇓ v ->
   {{ Γ ⊢ e : l }} ->
   exec_with_gamma
-      ( Some (IFB e THEN c1 ELSE c2 FI), S, P, m, t ) Γ pc
-      ( Some (if Nat.eqb v 0 then c2 else c1), S, P, m, t ) Γ (pc ⊔ l)
+      ( Some (IFB e THEN c1 ELSE c2 FI), S, P, m, t ) Γ ls
+      ( Some ((if Nat.eqb v 0 then c2 else c1) ;;; CJoin), S, P, m, t ) Γ (l :: ls)
 
-| GWhile : forall S P m t c e Γ pc,
+| GJoin : forall S P m t Γ l ls,
     exec_with_gamma
-      ( Some (WHILE e DO c END), S, P, m, t ) Γ pc
-      ( Some (IFB e THEN (c ;;; WHILE e DO c END) ELSE SKIP FI), S, P, m, t ) Γ pc
+      ( Some CJoin, S, P, m, t ) Γ (l :: ls)
+      ( None, S, P, m, t ) Γ ls
 
-| GInputPublic : forall S P m t x v Γ pc Γ',
-    Γ' = <[ x := pc ]> Γ ->
+| GWhile : forall S P m t c e Γ ls,
     exec_with_gamma
-      ( Some (INPUT x @Public), S, v::::P, m, t ) Γ pc
-      ( None, S, P, <[x := v ]> m, EvInput Public v :: t ) Γ' pc
+      ( Some (WHILE e DO c END), S, P, m, t ) Γ ls
+      ( Some (IFB e THEN (c ;;; WHILE e DO c END) ELSE SKIP FI), S, P, m, t ) Γ ls
 
-| GInputSecret : forall S P m t x v Γ pc Γ',
+| GInputPublic : forall S P m t x v Γ ls Γ',
+    Γ' = <[ x := fold_left join ls LPublic ]> Γ ->
+    exec_with_gamma
+      ( Some (INPUT x @Public), S, v::::P, m, t ) Γ ls
+      ( None, S, P, <[x := v ]> m, EvInput Public v :: t ) Γ' ls
+
+| GInputSecret : forall S P m t x v Γ ls Γ',
     Γ' = <[ x := LSecret ]> Γ ->
     exec_with_gamma
-      ( Some (INPUT x @Secret), v::::S, P, m, t ) Γ pc
-      ( None, S, P, <[x := v ]> m, EvInput Secret v :: t ) Γ' pc
+      ( Some (INPUT x @Secret), v::::S, P, m, t ) Γ ls
+      ( None, S, P, <[x := v ]> m, EvInput Secret v :: t ) Γ' ls
 
-| GOutput : forall S P m t ch e v Γ pc,
+| GOutput : forall S P m t ch e v Γ ls,
   e ; m ⇓ v ->
     exec_with_gamma
-      ( Some (OUTPUT e @ch), S, P, m, t ) Γ pc
-      ( None, S, P, m, EvOutput ch v :: t) Γ pc
+      ( Some (OUTPUT e @ch), S, P, m, t ) Γ ls
+      ( None, S, P, m, EvOutput ch v :: t) Γ ls
 .
 
 Inductive exec_with_gamma_trans :
-  config -> context -> confidentiality ->
-  config -> context -> confidentiality -> Prop :=
+  config -> context -> list confidentiality ->
+  config -> context -> list confidentiality -> Prop :=
 | Gexec_empty : forall s gamma pc, exec_with_gamma_trans s gamma pc s gamma pc
 | Gexec_step : forall s1 gamma1 pc1 s2 gamma2 pc2 s3 gamma3 pc3,
     exec_with_gamma s1 gamma1 pc1 s2 gamma2 pc2 ->
@@ -85,6 +91,26 @@ Inductive exec_with_gamma_trans :
     exec_with_gamma_trans s1 gamma1 pc1 s3 gamma3 pc3
 .
 
+
+Inductive bridge : config -> context -> list confidentiality -> nat -> option event -> config -> context -> list confidentiality -> Prop :=
+| BridgeStop : forall c S P m t Γ ls S' P' m' t' Γ' ls',
+    exec_with_gamma ( Some c, S, P, m, t ) Γ ls ( None, S', P', m', t' ) Γ' ls' ->
+    bridge ( Some c, S, P, m, t ) Γ ls 0 None ( None, S', P', m', t' ) Γ' ls'
+| BridgePublicInput : forall c S P m t Γ ls c' S' P' m' v Γ' ls',
+    exec_with_gamma ( Some c, S, P, m, t ) Γ ls
+      ( c', S', P', m', EvInput Public v :: t) Γ' ls' ->
+    bridge ( Some c, S, P, m, t) Γ ls 0 (Some (EvInput Public v))
+      ( c', S', P', m', EvInput Public v :: t) Γ' ls'
+| BridgePublicOutput : forall c S P m t Γ ls c' S' P' m' v Γ' ls',
+    exec_with_gamma ( Some c, S, P, m, t ) Γ ls
+      ( c', S', P', m', EvOutput Public v :: t) Γ' ls' ->
+    bridge ( Some c, S, P, m, t) Γ ls 0 (Some (EvOutput Public v))
+      ( c', S', P', m', EvOutput Public v :: t) Γ' ls'
+| BridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
+    exec_with_gamma ( Some c, S, P, m, t ) Γ ls ( Some c', S', P', m', t' ) Γ' ls' ->
+    bridge ( Some c', S', P', m', t' ) Γ' ls' n e ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
+    bridge ( Some c, S, P, m, t ) Γ ls (n+1) e ( c'', S'', P'', m'', t'' ) Γ'' ls''
+.
 
 
 (* Inductive pevent : Type := *)
