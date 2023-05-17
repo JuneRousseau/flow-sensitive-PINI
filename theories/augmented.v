@@ -19,13 +19,16 @@ Inductive exec_with_gamma : config -> context -> list confidentiality -> config 
       ( Some SKIP, S, P, m, t) Γ ls
       ( None, S, P, m, t) Γ ls
 
-| GAssign : forall S P m t x e v l Γ ls Γ',
+| GAssign : forall S P m t t' x e v l Γ ls Γ',
   e ; m ⇓ v ->
   {{ Γ ⊢ e : l }} ->
   Γ' = <[ x := fold_left join ls l ]> Γ ->
+  t' = match l with
+       | LPublic => Write x v :: t
+       | LSecret => t end ->
   exec_with_gamma
     ( Some (x ::= e), S, P, m, t ) Γ ls
-    ( None, S, P, <[ x := v ]> m, t) Γ' ls
+    ( None, S, P, <[ x := v ]> m, t') Γ' ls
 
 | GSeq1 : forall S P m t c1 c2 Γ ls S' P' m' t' c1' Γ' ls',
     exec_with_gamma
@@ -81,6 +84,7 @@ Inductive exec_with_gamma : config -> context -> list confidentiality -> config 
       ( None, S, P, m, EvOutput ch v :: t) Γ ls
 .
 
+(*
 Inductive exec_with_gamma_trans :
   config -> context -> list confidentiality ->
   config -> context -> list confidentiality -> Prop :=
@@ -89,23 +93,26 @@ Inductive exec_with_gamma_trans :
     exec_with_gamma s1 gamma1 pc1 s2 gamma2 pc2 ->
     exec_with_gamma_trans s2 gamma2 pc2 s3 gamma3 pc3 ->
     exec_with_gamma_trans s1 gamma1 pc1 s3 gamma3 pc3
-.
+. *)
 
+Definition isPublic ev :=
+  match ev with
+  | EvInput Public _
+  | EvOutput Public _
+  | Write _ _ => True
+  | _ => False
+  end. 
 
 Inductive bridge : config -> context -> list confidentiality -> nat -> option event -> config -> context -> list confidentiality -> Prop :=
 | BridgeStop : forall c S P m t Γ ls S' P' m' t' Γ' ls',
     exec_with_gamma ( Some c, S, P, m, t ) Γ ls ( None, S', P', m', t' ) Γ' ls' ->
     bridge ( Some c, S, P, m, t ) Γ ls 0 None ( None, S', P', m', t' ) Γ' ls'
-| BridgePublicInput : forall c S P m t Γ ls c' S' P' m' v Γ' ls',
+| BridgePublic : forall c S P m t Γ ls c' S' P' m' ev Γ' ls',
     exec_with_gamma ( Some c, S, P, m, t ) Γ ls
-      ( c', S', P', m', EvInput Public v :: t) Γ' ls' ->
-    bridge ( Some c, S, P, m, t) Γ ls 0 (Some (EvInput Public v))
-      ( c', S', P', m', EvInput Public v :: t) Γ' ls'
-| BridgePublicOutput : forall c S P m t Γ ls c' S' P' m' v Γ' ls',
-    exec_with_gamma ( Some c, S, P, m, t ) Γ ls
-      ( c', S', P', m', EvOutput Public v :: t) Γ' ls' ->
-    bridge ( Some c, S, P, m, t) Γ ls 0 (Some (EvOutput Public v))
-      ( c', S', P', m', EvOutput Public v :: t) Γ' ls'
+      ( c', S', P', m', ev :: t) Γ' ls' ->
+    isPublic ev ->
+    bridge ( Some c, S, P, m, t) Γ ls 0 (Some ev)
+      ( c', S', P', m', ev :: t) Γ' ls'
 | BridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
     exec_with_gamma ( Some c, S, P, m, t ) Γ ls ( Some c', S', P', m', t' ) Γ' ls' ->
     bridge ( Some c', S', P', m', t' ) Γ' ls' n e ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
