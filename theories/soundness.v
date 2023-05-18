@@ -59,7 +59,7 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
 
  
  Lemma bridge_adequacy :
-   forall c Γ Γf m S P t cf Sf Pf mf tf n,
+   forall n c Γ Γf m S P t cf Sf Pf mf tf,
      typecheck Γ LPublic c Γf ->
      wf_memory m Γ ->
      (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
@@ -68,6 +68,16 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
          (c', S', P', m', t') --->[n'] (cf, Sf, Pf, mf, tf) /\
          k + n' + 1 = n) \/ t = tf.
  Proof.
+   intro n.
+   induction n;
+   intros c Γ Γf m S P t cf Sf Pf mf tf Hc Hm Hred.
+   { inversion Hred; subst. by right. }
+   inversion Hred.
+   subst. inversion H0; subst.
+   all: try by inversion H1; [by subst; right | by inversion H].
+   - 
+
+   
  Admitted.
 
  Lemma bridge_noninterference :
@@ -122,19 +132,20 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
     { inversion Hred1; subst. apply trace_grows in Hred2 as [? ->].
       rewrite project_app. rewrite project_app Ht in Hlen. rewrite app_length in Hlen.
       destruct (⟦ x ⟧p) => //. simpl in Hlen. lia. }
+    apply bsteps_nsteps in Hred1 as (n & Hn & Hred1).
     eapply bridge_adequacy in Hred1; try exact Htype ; try done.
     destruct Hred1 as
        [ (c1' & S1' & P1' & m1' & t1' & Γ1' & ev1' & k1 & n1' & Hbr1 & Hred1 & Hn1) |
          <- ].
-    2:{ apply trace_grows in Hred2 as [? ->]. rewrite project_app.
+    2:{ apply trace_grows in Hred2 as [x ->]. rewrite project_app.
         rewrite project_app in Hlen.  rewrite app_length Ht in Hlen.
         destruct (⟦ x ⟧p) => //. simpl in Hlen. lia. } 
-    apply rtc_bsteps in Hred2 as [n2 Hred2].
+    apply rtc_nsteps in Hred2 as [n2 Hred2].
     eapply bridge_adequacy in Hred2; try exact Htype ; try done.    
      destruct Hred2 as
        [ (c2' & S2' & P2' & m2' & t2' & Γ2' & ev2' & k2 & n2' & Hbr2 & Hred2 & Hn2) |
          <- ].
-     2:{ apply trace_grows in Hred1' as [? ->]. rewrite project_app.
+     2:{ apply trace_grows in Hred1' as [x ->]. rewrite project_app.
          rewrite project_app Ht app_length in Hlen.
          destruct (⟦ x ⟧p) => //. simpl in Hlen; lia. }
      assert (Hbr2' := Hbr2).
@@ -150,9 +161,9 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
        subst.
        done. }
      eapply IHn1; last first. 
-     eapply rtc_bsteps. eexists; exact Hred1.
-     eapply rtc_bsteps. eexists; exact Hred2.
-     eapply bsteps_weaken; last exact Hred1.
+     eapply rtc_nsteps. eexists; exact Hred1.
+     eapply rtc_nsteps. eexists; exact Hred2.
+     eapply bsteps_nsteps; eexists; split; last exact Hred1.
      lia.
      all: try done.
 Qed.
