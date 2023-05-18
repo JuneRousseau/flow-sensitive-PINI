@@ -43,6 +43,155 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
  Qed.
 
 
+ Lemma trace_grows :
+   forall c S P m t c' S' P' m' t',
+     (c, S, P, m, t) --->* (c', S', P', m', t') ->
+     exists nw, t' = app nw t.
+ Proof.
+ Admitted.
+
+ Lemma project_app :
+   forall t1 t2,
+     ⟦ (t1 ++ t2)%list ⟧p = ((⟦ t1 ⟧p) ++ (⟦ t2 ⟧p))%list.
+ Proof.
+ Admitted.
+
+
+ 
+ Lemma bridge_adequacy :
+   forall c Γ Γf m S P t cf Sf Pf mf tf n,
+     typecheck Γ LPublic c Γf ->
+     wf_memory m Γ ->
+     (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
+     (exists c' S' P' m' t' Γ' ev k n',
+       bridge (Some c, S, P, m, t) Γ [] k ev (c', S', P', m', t') Γ' [] /\
+         (c', S', P', m', t') --->[n'] (cf, Sf, Pf, mf, tf) /\
+         k + n' + 1 = n) \/ t = tf.
+ Proof.
+ Admitted.
+
+ Lemma bridge_noninterference :
+   forall Γ m1 m2 c Γf ev1 ev2 n1 n2 c1 S1 S1' P P1 m1' t1 t1' c2 S2 S2' P2 m2' t2 t2' Γ1' Γ2',
+     agree_on_public Γ m1 m2 ->
+     (⟦ t1 ⟧p = ⟦ t2 ⟧p) -> 
+     typecheck Γ LPublic c Γf ->
+     bridge (Some c, S1, P, m1, t1) Γ [] n1 ev1 (c1, S1', P1, m1', t1') Γ1' [] ->
+     bridge (Some c, S2, P, m2, t2) Γ [] n2 ev2 (c2, S2', P2, m2', t2') Γ2' [] ->
+     c1 = c2 /\
+       P1 = P2 /\
+       Γ1' = Γ2' /\
+       agree_on_public Γ1' m1' m2' /\
+       ev1 = ev2 /\
+       ⟦ t1' ⟧p = ⟦ t2' ⟧p
+ .
+ Proof.
+ Admitted.
+
+ Lemma bridge_preservation :
+   forall Γ c Γf m S P t k ev c' S' P' m' t' Γ',
+     typecheck Γ LPublic c Γf ->
+     wf_memory m Γ ->
+     bridge (Some c, S, P, m, t) Γ [] k ev (c', S', P', m', t') Γ' [] ->
+     wf_memory m' Γ' /\ match c' with None => True | Some c' => typecheck Γ' LPublic c' Γf end.
+ Proof.
+ Admitted.
+
+
+
+
+ Lemma typecheck_is_sound :
+   forall c S1 S2 P m1 m2 t1 t2 c1 c2 S1' S2' P1 P2 m1' m2' t1' t2' Γ Γf,
+     typecheck Γ LPublic c Γf ->
+     agree_on_public Γ m1 m2 ->
+     wf_memory m1 Γ ->
+     wf_memory m2 Γ ->
+     (⟦ t1 ⟧p = ⟦ t2 ⟧p) ->
+     (Some c, S1, P, m1, t1) --->* (c1, S1', P1, m1', t1') ->
+     (Some c, S2, P, m2, t2) --->* (c2, S2', P2, m2', t2') ->
+     length (⟦ t1' ⟧p) = length (⟦ t2' ⟧p) ->
+     ⟦ t1' ⟧p = ⟦ t2' ⟧p.
+ Proof.
+   intros c S1 S2 P m1 m2 t1 t2 c1 c2 S1f S2f P1f P2f m1f m2f t1f t2f Γ Γf
+     Hc Hm Hm1 Hm2 Ht Hred1 Hred2 Hlen.
+   assert (Hred1' := Hred1).
+    apply rtc_bsteps in Hred1 as [n1 Hred1].
+    generalize dependent c. generalize dependent S1. generalize dependent S2.
+    generalize dependent P. generalize dependent m1. generalize dependent m2.
+    generalize dependent t1. generalize dependent t2. generalize dependent Γ.
+    induction n1; intros.
+    { inversion Hred1; subst. apply trace_grows in Hred2 as [? ->].
+      rewrite project_app. rewrite project_app Ht in Hlen. rewrite app_length in Hlen.
+      destruct (⟦ x ⟧p) => //. simpl in Hlen. lia. }
+    eapply bridge_adequacy in Hred1; try exact Htype ; try done.
+    destruct Hred1 as
+       [ (c1' & S1' & P1' & m1' & t1' & Γ1' & ev1' & k1 & n1' & Hbr1 & Hred1 & Hn1) |
+         <- ].
+    2:{ apply trace_grows in Hred2 as [? ->]. rewrite project_app.
+        rewrite project_app in Hlen.  rewrite app_length Ht in Hlen.
+        destruct (⟦ x ⟧p) => //. simpl in Hlen. lia. } 
+    apply rtc_bsteps in Hred2 as [n2 Hred2].
+    eapply bridge_adequacy in Hred2; try exact Htype ; try done.    
+     destruct Hred2 as
+       [ (c2' & S2' & P2' & m2' & t2' & Γ2' & ev2' & k2 & n2' & Hbr2 & Hred2 & Hn2) |
+         <- ].
+     2:{ apply trace_grows in Hred1' as [? ->]. rewrite project_app.
+         rewrite project_app Ht app_length in Hlen.
+         destruct (⟦ x ⟧p) => //. simpl in Hlen; lia. }
+     assert (Hbr2' := Hbr2).
+     eapply bridge_noninterference in Hbr2 as (Hc12 & HP & HΓ & Hm' & Hev & Ht');
+       try exact Hbr1; try done.
+     subst.
+     eapply bridge_preservation in Hbr1 as [Hm12 Hc2']; try done.
+     eapply bridge_preservation in Hbr2' as [Hm12' Hc2'']; try done.
+     destruct c2'; last first.
+     { inversion Hred1; last by inversion H.
+       subst.
+       inversion Hred2; last by inversion H.
+       subst.
+       done. }
+     eapply IHn1; last first. 
+     eapply rtc_bsteps. eexists; exact Hred1.
+     eapply rtc_bsteps. eexists; exact Hred2.
+     eapply bsteps_weaken; last exact Hred1.
+     lia.
+     all: try done.
+Qed.
+    
+
+ 
+ Lemma typecheck_PINI :
+   forall c Γ, typecheck ∅ LPublic c Γ -> PINI c.
+ Proof.
+   intros c Γ Htype.
+   unfold PINI.
+   intros P ev1 d t1 (Si1 & S1 & P1 & c1 & m1 & Hred1 & Ht1) S0.
+   split.
+   - intro Hk.
+     apply PKnow.
+     inversion Hk; subst.
+     destruct H as (S2 & P2 & c2 & m2 & t2 & H).
+     exists S2, P2, c2, m2, t2, ev1.
+     exact H.
+   - intro Hpk.
+     apply Know.
+     inversion Hpk; subst.
+     destruct H as (S2 & P2 & c2 & m2 & t2 & ev2 & Hred2 & Ht2).
+     replace ev1 with ev2.
+     { exists S2, P2, c2, m2, t2. by split. }
+     eapply typecheck_is_sound; last first.
+     exact Hred1. exact Hred2. exact Ht1. exact Ht2. 2: exact Htype. done.
+ Qed. 
+
+     
+    
+       
+     
+     
+     
+     
+     
+
+
 (* executing implies executing with gammas *)
 Lemma can_exec_with_gamma Γ0 pc0 P0 S0 c0 m0 t0 s1 :
   wf_memory m0 Γ0 ->
