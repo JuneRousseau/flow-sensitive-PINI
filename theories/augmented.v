@@ -11,119 +11,180 @@ From fspini Require Import
   map_simpl.
 
 
+Inductive public_event :=
+| Input : value -> public_event
+| Output : value -> public_event
+| Write : var -> value -> public_event
+.
+
+Inductive jcommand :=
+| JSkip : jcommand
+| JAssign : var -> expr -> jcommand
+| JSeq : jcommand -> command -> jcommand
+| JIfThenElse : expr -> command -> command -> jcommand
+| JWhile : expr -> command -> jcommand
+| JInput : channel -> var -> jcommand
+| JOutput : channel -> expr -> jcommand
+| JThenJoin : command -> jcommand 
+.
+
+Fixpoint jcommand_of_command c :=
+  match c with
+  | CSkip => JSkip
+  | CAssign x e => JAssign x e
+  | CSeq c1 c2 => JSeq (jcommand_of_command c1) c2
+  | CIfThenElse a b c => JIfThenElse a b c
+  | CWhile e c => JWhile e c
+  | CInput c x => JInput c x
+  | COutput c e => JOutput c e
+  end.
+
+Fixpoint command_of_jcommand j :=
+  match j with
+  | JSkip => CSkip
+  | JAssign x e => CAssign x e
+  | JSeq j1 c2 => CSeq (command_of_jcommand j1) c2
+  | JIfThenElse a b c => CIfThenElse a b c
+  | JWhile e c => CWhile e c
+  | JInput c x => CInput c x
+  | JOutput c e => COutput c e
+  | JThenJoin c => c
+  end.
+
+Lemma command_id : forall c, command_of_jcommand (jcommand_of_command c) = c.
+Proof. intros. induction c => //=. by rewrite IHc1. Qed. 
+
+Definition jconfig : Type :=
+  (option jcommand) * (Stream value) * (Stream value) * memory * trace.
+
 
 (* Attempt at defining a statement that intertwines execution and typechecking *)
-Inductive exec_with_gamma : config -> context -> list confidentiality -> config -> context -> list confidentiality -> Prop :=
+Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option public_event -> jconfig -> context -> list confidentiality -> Prop :=
 | GSkip : forall S P m t Γ ls,
   exec_with_gamma
-      ( Some SKIP, S, P, m, t) Γ ls
-      ( None, S, P, m, t) Γ ls
+    ( Some JSkip, S, P, m, t) Γ ls
+    None
+    ( None, S, P, m, t) Γ ls
 
-| GAssign : forall S P m t t' x e v l Γ ls Γ',
+| GAssign : forall S P m t ev x e v l Γ ls Γ',
   e ; m ⇓ v ->
   {{ Γ ⊢ e : l }} ->
   Γ' = <[ x := fold_left join ls l ]> Γ ->
-  t' = match l with
-       | LPublic => Write x v :: t
-       | LSecret => t end ->
+  ev = match l with
+       | LPublic => Some (Write x v)
+       | LSecret => None end ->
   exec_with_gamma
-    ( Some (x ::= e), S, P, m, t ) Γ ls
-    ( None, S, P, <[ x := v ]> m, t') Γ' ls
+    ( Some (JAssign x e), S, P, m, t ) Γ ls
+    ev
+    ( None, S, P, <[ x := v ]> m, t) Γ' ls
 
-| GSeq1 : forall S P m t c1 c2 Γ ls S' P' m' t' c1' Γ' ls',
+| GSeq1 : forall S P m t c1 c2 Γ ls S' P' m' t' c1' Γ' ls' ev,
     exec_with_gamma
       ( Some c1, S, P, m, t) Γ ls
+      ev
       ( Some c1', S', P', m', t') Γ' ls'
     ->
     exec_with_gamma
-      ( Some (c1 ;;; c2), S, P, m, t ) Γ ls
-      ( Some (c1' ;;; c2), S', P', m', t' ) Γ' ls'
+      ( Some (JSeq c1 c2), S, P, m, t ) Γ ls
+      ev
+      ( Some (JSeq c1' c2), S', P', m', t' ) Γ' ls'
 
-| GSeq2 : forall S P m t c1 c2 Γ ls S' P' m' t' Γ' ls' ,
+| GSeq2 : forall S P m t c1 c2 Γ ls ls' S' P' m' t' Γ' ev,
     exec_with_gamma
       ( Some c1, S, P, m , t ) Γ ls
+      ev
       ( None, S', P', m', t' ) Γ' ls'
     ->
     exec_with_gamma
-      ( Some (c1 ;;; c2), S, P, m, t ) Γ ls
-      ( Some c2, S', P', m', t') Γ' ls'
+      ( Some (JSeq c1 c2), S, P, m, t ) Γ ls
+      ev
+      ( Some (jcommand_of_command c2), S', P', m', t') Γ' []
 
 | GIf : forall S P m t (c1 c2 : command) e v l Γ ls,
   e ; m ⇓ v ->
   {{ Γ ⊢ e : l }} ->
   exec_with_gamma
-      ( Some (IFB e THEN c1 ELSE c2 FI), S, P, m, t ) Γ ls
-      ( Some ((if Nat.eqb v 0 then c2 else c1) ;;; CJoin), S, P, m, t ) Γ (l :: ls)
+    ( Some (JIfThenElse e c1 c2), S, P, m, t ) Γ ls
+    None
+    ( Some (JThenJoin (if Nat.eqb v 0 then c2 else c1)), S, P, m, t ) Γ (l :: ls)
 
-| GJoin : forall S P m t Γ l ls,
+| GJoin : forall S P m t Γ l ls c,
     exec_with_gamma
-      ( Some CJoin, S, P, m, t ) Γ (l :: ls)
-      ( None, S, P, m, t ) Γ ls
+      ( Some (JThenJoin c), S, P, m, t ) Γ (l :: ls)
+      None
+      ( Some (jcommand_of_command c), S, P, m, t ) Γ ls
 
 | GWhile : forall S P m t c e Γ ls,
     exec_with_gamma
-      ( Some (WHILE e DO c END), S, P, m, t ) Γ ls
-      ( Some (IFB e THEN (c ;;; WHILE e DO c END) ELSE SKIP FI), S, P, m, t ) Γ ls
+      ( Some (JWhile e c), S, P, m, t ) Γ ls
+      None
+      ( Some (JIfThenElse e (c ;;; WHILE e DO c END) SKIP), S, P, m, t ) Γ ls
 
 | GInputPublic : forall S P m t x v Γ ls Γ',
     Γ' = <[ x := fold_left join ls LPublic ]> Γ ->
     exec_with_gamma
-      ( Some (INPUT x @Public), S, v::::P, m, t ) Γ ls
+      ( Some (JInput Public x), S, v::::P, m, t ) Γ ls
+      ( Some (Input v))
       ( None, S, P, <[x := v ]> m, EvInput Public v :: t ) Γ' ls
 
 | GInputSecret : forall S P m t x v Γ ls Γ',
     Γ' = <[ x := LSecret ]> Γ ->
     exec_with_gamma
-      ( Some (INPUT x @Secret), v::::S, P, m, t ) Γ ls
+      ( Some (JInput Secret x), v::::S, P, m, t ) Γ ls
+      None 
       ( None, S, P, <[x := v ]> m, EvInput Secret v :: t ) Γ' ls
 
-| GOutput : forall S P m t ch e v Γ ls,
-  e ; m ⇓ v ->
+| GOutput : forall S P m t ch e v Γ ls ev,
+    e ; m ⇓ v ->
+        ev = match ch with Public => Some (Output v) | Secret => None end -> 
     exec_with_gamma
-      ( Some (OUTPUT e @ch), S, P, m, t ) Γ ls
+      ( Some (JOutput ch e), S, P, m, t ) Γ ls
+      ev
       ( None, S, P, m, EvOutput ch v :: t) Γ ls
 .
 
 (*
 Inductive exec_with_gamma_trans :
-  config -> context -> list confidentiality ->
+  config -> context -> list confidentiality -> nat ->
   config -> context -> list confidentiality -> Prop :=
-| Gexec_empty : forall s gamma pc, exec_with_gamma_trans s gamma pc s gamma pc
-| Gexec_step : forall s1 gamma1 pc1 s2 gamma2 pc2 s3 gamma3 pc3,
-    exec_with_gamma s1 gamma1 pc1 s2 gamma2 pc2 ->
-    exec_with_gamma_trans s2 gamma2 pc2 s3 gamma3 pc3 ->
-    exec_with_gamma_trans s1 gamma1 pc1 s3 gamma3 pc3
+| Gexec_empty : forall s gamma ls, exec_with_gamma_trans s gamma ls 0 s gamma ls
+| Gexec_step : forall s1 gamma1 ls1 s2 gamma2 ls2 s3 gamma3 ls3 n,
+    exec_with_gamma s1 gamma1 ls1 s2 gamma2 ls2 ->
+    exec_with_gamma_trans s2 gamma2 ls2 n s3 gamma3 ls3 ->
+    exec_with_gamma_trans s1 gamma1 ls1 (n+1) s3 gamma3 ls3
 . *)
-
+(*
 Definition isPublic ev :=
   match ev with
   | EvInput Public _
   | EvOutput Public _
   | Write _ _ => True
   | _ => False
-  end. 
+  end.  *)
 
-Inductive bridge : config -> context -> list confidentiality -> nat -> option event -> config -> context -> list confidentiality -> Prop :=
+Inductive bridge : jconfig -> context -> list confidentiality -> nat -> option public_event -> jconfig -> context -> list confidentiality -> Prop :=
 | BridgeStop : forall c S P m t Γ ls S' P' m' t' Γ' ls',
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
+      None
       ( None, S', P', m', t' ) Γ' ls' ->
     bridge
       ( Some c, S, P, m, t ) Γ ls
       0 None
       ( None, S', P', m', t' ) Γ' ls'
-| BridgePublic : forall c S P m t Γ ls c' S' P' m' ev Γ' ls',
+| BridgePublic : forall c S P m t t' Γ ls c' S' P' m' ev Γ' ls',
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
-      ( c', S', P', m', ev :: t) Γ' ls' ->
-    isPublic ev ->
+      (Some ev)
+      ( c', S', P', m', t') Γ' ls' ->
     bridge
       ( Some c, S, P, m, t) Γ ls
       0 (Some ev)
-      ( c', S', P', m', ev :: t) Γ' ls'
+      ( c', S', P', m', t') Γ' ls'
 | BridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
+      None
       ( Some c', S', P', m', t' ) Γ' ls' ->
     bridge
       ( Some c', S', P', m', t' ) Γ' ls'

@@ -28,7 +28,7 @@ Inductive command :=
 | CWhile : expr -> command -> command
 | CInput : channel -> var -> command
 | COutput : channel -> expr -> command
-| CJoin : command (* Used only inside proofs (see augmented.v) *)
+(* | CJoin : command (* Used only inside proofs (see augmented.v) *) *)
 .
 
 Coercion ELit: value >-> expr.
@@ -79,7 +79,7 @@ Notation "x :::: c" := (Streams.Cons x c) (at level 85).
 Inductive event :=
 | EvInput : channel -> value -> event
 | EvOutput : channel -> value -> event
-| Write : var -> value -> event (* Used only in proofs (see augmented.v) *)
+(* | Write : var -> value -> event (* Used only in proofs (see augmented.v) *) *)
 .
 Definition trace := list event.
 (* In the state, Some c represents a command, and None represents a Stop *)
