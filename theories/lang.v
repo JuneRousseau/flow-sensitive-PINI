@@ -127,7 +127,7 @@ where "cfg '--->' cfg'" := (exec_command cfg cfg').
 
 (* at most n execution steps: *)
 Definition exec_n : nat -> config -> config -> Prop := bsteps exec_command.
-Notation "cfg '--->' n cfg'" := (exec_n n cfg cfg') (at level 40).
+Notation "cfg '--->[' n ']' cfg'" := (exec_n n cfg cfg') (at level 40).
 
 (* reflexive and transitive closure of the execution relation: *)
 Definition exec_trans : config -> config -> Prop := rtc exec_command.

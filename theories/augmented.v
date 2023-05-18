@@ -105,18 +105,34 @@ Definition isPublic ev :=
 
 Inductive bridge : config -> context -> list confidentiality -> nat -> option event -> config -> context -> list confidentiality -> Prop :=
 | BridgeStop : forall c S P m t Γ ls S' P' m' t' Γ' ls',
-    exec_with_gamma ( Some c, S, P, m, t ) Γ ls ( None, S', P', m', t' ) Γ' ls' ->
-    bridge ( Some c, S, P, m, t ) Γ ls 0 None ( None, S', P', m', t' ) Γ' ls'
+    exec_with_gamma
+      ( Some c, S, P, m, t ) Γ ls
+      ( None, S', P', m', t' ) Γ' ls' ->
+    bridge
+      ( Some c, S, P, m, t ) Γ ls
+      0 None
+      ( None, S', P', m', t' ) Γ' ls'
 | BridgePublic : forall c S P m t Γ ls c' S' P' m' ev Γ' ls',
-    exec_with_gamma ( Some c, S, P, m, t ) Γ ls
+    exec_with_gamma
+      ( Some c, S, P, m, t ) Γ ls
       ( c', S', P', m', ev :: t) Γ' ls' ->
     isPublic ev ->
-    bridge ( Some c, S, P, m, t) Γ ls 0 (Some ev)
+    bridge
+      ( Some c, S, P, m, t) Γ ls
+      0 (Some ev)
       ( c', S', P', m', ev :: t) Γ' ls'
 | BridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
-    exec_with_gamma ( Some c, S, P, m, t ) Γ ls ( Some c', S', P', m', t' ) Γ' ls' ->
-    bridge ( Some c', S', P', m', t' ) Γ' ls' n e ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
-    bridge ( Some c, S, P, m, t ) Γ ls (n+1) e ( c'', S'', P'', m'', t'' ) Γ'' ls''
+    exec_with_gamma
+      ( Some c, S, P, m, t ) Γ ls
+      ( Some c', S', P', m', t' ) Γ' ls' ->
+    bridge
+      ( Some c', S', P', m', t' ) Γ' ls'
+      n e
+      ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
+    bridge
+      ( Some c, S, P, m, t ) Γ ls
+      (n+1) e
+      ( c'', S'', P'', m'', t'' ) Γ'' ls''
 .
 
 
