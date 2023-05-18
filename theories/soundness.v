@@ -57,26 +57,102 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
  Admitted.
 
 
+ Lemma has_security_level :
+   forall e m v Γ,
+     e; m ⇓ v -> wf_memory m Γ -> exists l, {{Γ ⊢ e : l }}.
+Proof.
+  intros * Hv Hm.
+  induction Hv.
+  - by eexists; econstructor.
+  - unfold wf_memory in Hm.
+    specialize (Hm x). rewrite H in Hm.
+    destruct (Γ !! x) eqn:Hx => //.
+    exists c. by econstructor.
+  - specialize (IHHv1 Hm) as [l1 He1].
+    specialize (IHHv2 Hm) as [l2 He2].
+    exists (join l1 l2). by econstructor.
+Qed. 
+
+
+(* executing implies executing with gammas *)
+Lemma can_exec_with_gamma Γ0 (* pc0 *) P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 :
+  wf_memory m0 Γ0 ->
+  ( c0 , P0, S0, m0, t0 ) ---> (c1, P1, S1, m1, t1) ->
+  exists j1 Γ1 pc1 ev,
+    exec_with_gamma
+      ( option_map jcommand_of_command c0 , P0, S0, m0, t0 ) Γ0 []
+      ev
+      ( j1, P1, S1, m1, t1 ) Γ1 pc1  /\ option_map command_of_jcommand j1 = c1.
+Proof.
+  intros Hwf Hstep.
+  destruct c0 as [c0|]; [|by inversion Hstep].
+
+  generalize dependent c1.
+  induction c0; intros;
+    try by inversion Hstep; subst; repeat eexists; econstructor.
+  - inversion Hstep; subst.
+    destruct (has_security_level _ _ _ _  H0 Hwf) as [l He].
+    repeat eexists. econstructor => //. done.
+  - inversion Hstep; subst.
+    + apply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+      destruct j1 => //. repeat eexists. econstructor => //=.
+      inversion Ht. done. 
+    + apply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+      destruct j1 => //. repeat eexists. eapply GSeq2 => //.
+      simpl. rewrite command_id. done. 
+  - inversion Hstep; subst.
+    destruct (has_security_level _ _ _ _ H0 Hwf) as [l He].
+    eexists _,_,_,_. split. econstructor => //. done.
+Qed. 
+
+(*
+(* executing implies executing with gammas *)
+Lemma can_exec_with_gamma_trans Γ0 pc0 P0 S0 c0 m0 t0 s1 :
+  wf_memory m0 Γ0 ->
+  ( c0 , P0, S0, m0, t0 ) --->* s1 ->
+  exists Γ1 pc1,
+    exec_with_gamma_trans
+      ( c0 , P0, S0, m0, t0) Γ0 pc0
+      s1 Γ1 pc1.
+Proof.
+  intros Hwf Hstep.
+  induction Hstep.
+  - eexists; eexists; econstructor.
+  - destruct IHHstep as (Γ1 & pc1 & IH).
+    (* destruct x,st. as (S & P & m & t). *)
+    (* destruct x,st,p,p. *)
+    (* eapply can_exec_with_gamma in Hwf. *)
+    (* + admit. *)
+    (* + admit. *)
+Admitted. *)
+
  
  Lemma bridge_adequacy :
-   forall n c Γ Γf m S P t cf Sf Pf mf tf,
-     typecheck Γ LPublic c Γf ->
+   forall n c pc Γ Γf m S P t cf Sf Pf mf tf,
+     typecheck Γ pc c Γf ->
      wf_memory m Γ ->
      (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
-     (exists c' S' P' m' t' Γ' ev k n',
-       bridge (Some c, S, P, m, t) Γ [] k ev (c', S', P', m', t') Γ' [] /\
-         (c', S', P', m', t') --->[n'] (cf, Sf, Pf, mf, tf) /\
+     (exists j S' P' m' t' Γ' ls' ev k n',
+       bridge (Some (jcommand_of_command c), S, P, m, t) Γ [] k ev (j, S', P', m', t') Γ' ls' /\
+         (option_map command_of_jcommand j, S', P', m', t') --->[n'] (cf, Sf, Pf, mf, tf) /\
          k + n' + 1 = n) \/ t = tf.
  Proof.
    intro n.
    induction n;
-   intros c Γ Γf m S P t cf Sf Pf mf tf Hc Hm Hred.
+   intros * Hc Hm Hred.
    { inversion Hred; subst. by right. }
-   inversion Hred.
-   subst. inversion H0; subst.
-   all: try by inversion H1; [by subst; right | by inversion H].
-   - 
 
+   inversion Hred; subst.
+   destruct y as [[[[c1 S1] P1] m1] t1]. 
+   eapply can_exec_with_gamma in H0 as (j1 & Γ1 & pc1 & ev & Hredg & Hj); last done.
+   destruct ev.
+   - left. repeat eexists. apply BridgePublic. exact Hredg.
+     rewrite Hj. exact H1. lia.
+   - destruct n.
+     + admit.
+     + destruct c1; last first.
+       { inversion H1. inversion H0. }
+       eapply IHn in H1. 
    
  Admitted.
 
