@@ -192,7 +192,28 @@ Inductive bridge : jconfig -> context -> list confidentiality -> nat -> option p
       ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
     bridge
       ( Some c, S, P, m, t ) Γ ls
-      (n+1) e
+      (Datatypes.S n) e
+      ( c'', S'', P'', m'', t'' ) Γ'' ls''
+.
+
+Inductive incomplete_bridge : jconfig -> context -> list confidentiality -> nat -> jconfig -> context -> list confidentiality -> Prop :=
+| IBridgeStop : forall c S P m t Γ ls,
+    incomplete_bridge
+      ( Some c, S, P, m, t ) Γ ls
+      0
+      ( Some c, S, P, m, t ) Γ ls
+| IBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n c'' S'' P'' m'' t'' Γ'' ls'',
+    exec_with_gamma
+      ( Some c, S, P, m, t ) Γ ls
+      None
+      ( Some c', S', P', m', t' ) Γ' ls' ->
+    incomplete_bridge
+      ( Some c', S', P', m', t' ) Γ' ls'
+      n
+      ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
+    incomplete_bridge
+      ( Some c, S, P, m, t ) Γ ls
+      (Datatypes.S n)
       ( c'', S'', P'', m'', t'' ) Γ'' ls''
 .
 

@@ -135,12 +135,16 @@ Admitted. *)
      (exists j S' P' m' t' Γ' ls' ev k n',
        bridge (Some (jcommand_of_command c), S, P, m, t) Γ [] k ev (j, S', P', m', t') Γ' ls' /\
          (option_map command_of_jcommand j, S', P', m', t') --->[n'] (cf, Sf, Pf, mf, tf) /\
-         k + n' + 1 = n) \/ t = tf.
+         k + n' + 1 = n) \/
+       (exists j Γ' ls,
+           incomplete_bridge (Some (jcommand_of_command c), S, P, m, t) Γ [] n
+             ( j, Sf, Pf, mf, tf ) Γ' ls /\ option_map command_of_jcommand j = cf).
  Proof.
    intro n.
    induction n;
-   intros * Hc Hm Hred.
-   { inversion Hred; subst. by right. }
+     intros * Hc Hm Hred.
+   { inversion Hred; subst. right. repeat eexists. econstructor. simpl.
+     by rewrite command_id. }
 
    inversion Hred; subst.
    destruct y as [[[[c1 S1] P1] m1] t1]. 
@@ -149,10 +153,22 @@ Admitted. *)
    - left. repeat eexists. apply BridgePublic. exact Hredg.
      rewrite Hj. exact H1. lia.
    - destruct n.
-     + admit.
+     + destruct j1.
+       * right. inversion H1; subst.
+         repeat eexists. econstructor. exact Hredg. econstructor.
+       * left. simpl in Hj; subst. inversion H1; subst. repeat eexists.
+         econstructor. exact Hredg. instantiate (1 := 0). done. lia.
      + destruct c1; last first.
        { inversion H1. inversion H0. }
-       eapply IHn in H1. 
+       destruct j1 => //. 
+       assert (-{ Γ1, fold_left join pc1 LPublic ⊢ c0 ~> Γf }-).
+       admit. 
+       eapply IHn in H1 as
+           [ (j1 & S' & P' & m' & t' & Γ' & ls' & ev & k & n' & Hbr & Hfollow) |
+             (j1 & Γ' & ls & Hbr & Hj') ] => //.
+       * left. repeat eexists. eapply BridgeMulti.
+         exact Hredg. exact Hbr. 
+         
    
  Admitted.
 
