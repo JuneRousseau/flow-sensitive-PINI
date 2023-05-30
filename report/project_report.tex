@@ -11,13 +11,12 @@
 %%
 
 
-
 \documentclass[10pt]{article}
 \input{prelude}
 \input{instructions}
 
 \title{
-   Flow-Sensitive Type System for PINI
+   Flow-Sensitive Type System for PINI --- Project Report
 }
 
 \groupNumber{1}
@@ -25,11 +24,170 @@
 
 \begin{document}
 \maketitle
+
+\begin{abstract}
+   Abstract of the project report: what, why PINI ? Type system for enforcement. Soundness.
+\end{abstract}
+
 \thispagestyle{empty}
 
-\section{Report}
+\section{Introduction}
+\label{sec:intro}
+\instruction{ Write introduction }
 
-\instruction{ Fill in the report }
+Threat model: integrity, confidentiality, availability. For confidentiality, in a simple setup: 2
+channels (public and private). We want to make sure that the secret data does not leak, both
+directly (output a data tagged as secret on the public channel) or indirectly (event on the public
+channel that happens in a control-flow depending on a secret input).
+Side-channel such as timing-channel or cache-channel are out of scope.
+
+Concept of non-interference, meaning that ``public outputs do not depend on secret inputs''.
+Non-interference is a 2-hyperproperty, which means that it is a property that depends on 2
+execution traces of the program. The way to prove that public outputs are independent from the
+secret input is to run the same program 2 times, with the same public inputs, but different secret
+input. If we notice a difference on the public output channel, only the secret input are responsible
+(as the public ones are the same), and the not independent.
+
+Different variant of non-interference: for instance, terminaison sensitive (TSNI), terminaison insensitive
+(TINI).
+Traditionally two way to enforce NI:
+\begin{itemize}
+  \item Monitor, that \emph{dynamically} check the public output channel that it does not leak
+        values tagged as secret.
+  \item Type system, which ensure \emph{statically} that a well-typed program respects NI.
+\end{itemize}
+
+\instruction{ Do we detail more the two approaches ? I don't think that it is necessary }
+
+In this work, we focus in a variant of NI, called Progress-Insensitive-Non-Interference (PINI).
+Interesting because \instruction{ complete }.
+We develop a flow-sensitive type-system that enforce PINI, ie. all well-typed program respects PINI.
+We prove that the type system is sound.
+
+In the following report, we first introduce the operational semantic of the language in
+Section~\ref{subsec:opsem} that we consider.
+We then formally define our notion of non-interference Section~\ref{subsec:ni}, as well as the type
+system to enforce it Section~\ref{subsec:type_system}.
+Finally, we detail the soundness theorem and its proof in Section~\ref{sec:soundness}.
+
+This work is formalized in the Coq Proof Assistant.
+
+\section{Blabla}
+\label{sec:bla}
+\instruction{ Fill the section }
+
+\subsection{WHILE language with I/O}%
+\label{subsec:opsem}
+
+The language is a simple WHILE language with I/O.
+\instruction{ Figure syntax }
+\instruction{ Figure operational semantic }
+
+\subsection{Non-interference}%
+\label{subsec:ni}
+
+Non-interference: ``public outputs do not depend on secret inputs''.
+Knowledge of the attacker: what does an attacker learn from a public event.
+Given a public trace, public input and program, the attacker knowledge is the set of secret inputs
+that the attacker that are consistent with the trace of execution.
+
+Progress-sensitive: public events does not give more knowledge to the attacker. In other words,
+at any step, the knowledge of the attacker is the same (it cannot narrow down the set of possible
+secret input).
+
+Intuition ? Might be hard to enforce (why ?).
+
+Because PSNI is hard to enforce, we define Progress-Insensitive (PINI).
+
+Progress-knowledge:
+Given a public trace, public input and program, the attacker knowledge is the set of secret inputs
+that the attacker that are consistent with the trace of execution, if learning one more public
+event.
+Progress-insensitive: the attacker does not learn more by knowing the next public event.
+
+Intuition ? Why easier to enforce ?
+The attacker already knows in advance that there will be another event, but it doesn't know which
+one precisely. Knowing what the event is exactly does not give more knowledge.
+
+\subsection{Type system}%
+\label{subsec:type_system}
+
+We define a type system that enforce PINI.
+The type system is flow sensitive.
+\instruction{ What does flow sensitive means ? }.
+
+\instruction{ What can we say that is interesting about the type system ? }.
+
+\instruction{ Figure type system }.
+
+\section{Soundness}%
+\label{sec:soundness}
+
+The soundness theorem states that the type system actually enforce PINI. In other words, it formally
+states that any well-typed program is PINI.
+
+\instruction{ Fill the section depending on the approach }
+
+\subsection{Approach}%
+\label{subsec:approach}
+
+In order to prove the theorem, we follow and adapt the approach of (information flow lecture notes).
+
+Definition of an augmented language, that explicitly specify when we reach a join point. Definition
+of the semantic for the augmented language, that keep track of the type with the typing environment.
+
+We have a correspondence between the original language and the augmented syntax, and we show that
+the semantic are equivalent.
+
+Then we define a bridge relation, in order to reason about the transitions that emits a public
+event.
+The bridge relation reduces a state until it reaches either a terminal state, or emits a public
+event.
+
+\instruction{ Preservation of well-formedness ?? }
+\subsection{Auxiliary language}%
+\label{subsec:aux_lang}
+
+The syntax of the auxiliary language is the following.
+\instruction{figure syntax auxiliary}
+
+The auxiliary language simply adds an explicit command \emph{join} in order to reason about the
+security level of the pc when leaving a if-then-else statement.
+\instruction{ Why do we need an explicit join ? }
+
+The operational semantic carries along the typing context, which associate a security level to the
+variables in the memory and to the pc.
+We use a vector of security labels to represent the pc.
+
+\instruction{figure opsem auxiliary}
+
+At every control-flow branch, we add the security label of the condition expression to the pc
+vector. As such, the current pc label is on top of the vector. When reaching a join, we remove the
+last pc from the vector. If the vector is empty, then the pc is public.
+
+\instruction{ Why do we need to proceed this way ? }
+
+We define a transformation that establishes an equivalence between the original language and the
+auxiliary language.
+The transformation from the auxiliary language to the original language consists on erasing the join
+instructions.
+
+The adequacy of the auxiliary language establishes that it is equivalent to the original language.
+% From the original language, an if-then-else instruction becomes a sequence of if-then-else ; join.
+
+\subsection{Bridge relation}%
+\label{subsec:brigde_rel}
+
+\subsection{Main theorem}%
+\label{subsec:main_theorem}
+
+Composition of the lemma that leads to the soundness theorem.
+
+\section{Conclusion}%
+\label{sec:conclusion}
+
+We have defined a type-system for PINI. Mechanized the proof of soundness in Coq.
+What next ?
 
 
 %% References
