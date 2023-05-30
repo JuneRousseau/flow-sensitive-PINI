@@ -149,7 +149,7 @@ Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option
     exec_with_gamma
       ( Some (JSeq c1 c2), S, P, m, t ) Γ ls
       ev
-      ( Some c2, S', P', m', t') Γ' []
+      ( Some c2, S', P', m', t') Γ' (* [] *) ls' (* Note: why was this [] before? *)
 
 | GIf : forall S P m t (c1 c2 : jcommand) e v l Γ ls,
   e ; m ⇓ v ->
