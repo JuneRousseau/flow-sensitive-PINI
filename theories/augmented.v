@@ -20,21 +20,22 @@ Inductive public_event :=
 Inductive jcommand :=
 | JSkip : jcommand
 | JAssign : var -> expr -> jcommand
-| JSeq : jcommand -> command -> jcommand
-| JIfThenElse : expr -> command -> command -> jcommand
-| JWhile : expr -> command -> jcommand
+| JSeq : jcommand -> jcommand -> jcommand
+| JIfThenElse : expr -> jcommand -> jcommand -> jcommand
+| JWhile : expr -> jcommand -> jcommand
 | JInput : channel -> var -> jcommand
 | JOutput : channel -> expr -> jcommand
-| JThenJoin : command -> jcommand 
+| JThenJoin : jcommand -> jcommand 
 .
 
 Fixpoint jcommand_of_command c :=
   match c with
   | CSkip => JSkip
   | CAssign x e => JAssign x e
-  | CSeq c1 c2 => JSeq (jcommand_of_command c1) c2
-  | CIfThenElse a b c => JIfThenElse a b c
-  | CWhile e c => JWhile e c
+  | CSeq c1 c2 => JSeq (jcommand_of_command c1) (jcommand_of_command c2)
+  | CIfThenElse a b c => JIfThenElse a (JThenJoin (jcommand_of_command b))
+                          (JThenJoin (jcommand_of_command c))
+  | CWhile e c => JWhile e (jcommand_of_command c)
   | CInput c x => JInput c x
   | COutput c e => JOutput c e
   end.
@@ -43,19 +44,69 @@ Fixpoint command_of_jcommand j :=
   match j with
   | JSkip => CSkip
   | JAssign x e => CAssign x e
-  | JSeq j1 c2 => CSeq (command_of_jcommand j1) c2
-  | JIfThenElse a b c => CIfThenElse a b c
-  | JWhile e c => CWhile e c
+  | JSeq j1 c2 => CSeq (command_of_jcommand j1) (command_of_jcommand c2)
+  | JIfThenElse a b c => CIfThenElse a (command_of_jcommand b) (command_of_jcommand c)
+  | JWhile e c => CWhile e (command_of_jcommand c)
   | JInput c x => CInput c x
   | JOutput c e => COutput c e
-  | JThenJoin c => c
+  | JThenJoin j => command_of_jcommand j
   end.
 
 Lemma command_id : forall c, command_of_jcommand (jcommand_of_command c) = c.
-Proof. intros. induction c => //=. by rewrite IHc1. Qed. 
+Proof. intros. induction c => //=; try by rewrite IHc1 IHc2. by rewrite IHc. Qed. 
 
 Definition jconfig : Type :=
   (option jcommand) * (Stream value) * (Stream value) * memory * trace.
+
+
+Inductive jtypecheck : context -> list confidentiality -> jcommand -> context -> list confidentiality -> Prop :=
+| JTSkip : forall Γ pc,
+    jtypecheck Γ pc JSkip Γ pc
+
+| JTAssign : forall le Γ pc x e Γ',
+    {{ Γ ⊢ e : le }} ->
+    Γ' = <[ x := fold_left join pc le ]> Γ ->
+    jtypecheck Γ pc (JAssign x e) Γ' pc
+
+| JTSeq : forall (Γ1 Γ2 Γ3 : context) pc1 pc2 pc3 c1 c2,
+  jtypecheck Γ1 pc1 c1 Γ2 pc2 ->
+  jtypecheck Γ2 pc2 c2 Γ3 pc3 ->
+  jtypecheck Γ1 pc1 (JSeq c1 c2) Γ3 pc3
+
+| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2 pc1 pc2,
+  {{ Γ ⊢ e : l }} ->
+  jtypecheck Γ (l :: pc) c1 Γ1 pc1 ->
+  jtypecheck Γ (l :: pc) c2 Γ2 pc2 ->
+  jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pc1 (* pc1 TO FIX must include pc2 *)
+
+(* Does not change the environment *)
+| JTWhile1 : forall l Γ pc e c,
+  {{ Γ ⊢ e : l }} ->
+  jtypecheck Γ (l :: pc) c Γ (l :: pc) ->
+  jtypecheck Γ pc (JWhile e c) Γ pc
+
+(* Does change the environment *)
+| JTWhile2 : forall l Γ pc e c Γ' pc' Γ'' pc'',
+  {{ Γ ⊢ e : l }} ->
+  jtypecheck Γ (l :: pc) c Γ'' pc'' ->
+  jtypecheck Γ'' pc (JWhile e c) Γ' pc' ->
+  jtypecheck Γ pc (JWhile e c) Γ' pc'
+
+| JTInput : forall Γ pc x ch Γ',
+  (fold_left join pc LPublic ⊑ confidentiality_of_channel ch) ->
+  Γ' = <[ x := (fold_left join pc (confidentiality_of_channel ch)) ]> Γ ->
+  jtypecheck Γ pc (JInput ch x) Γ' pc
+
+| JTOutput : forall le Γ pc e ch,
+  {{ Γ ⊢ e : le }} ->
+  (fold_left join pc le ⊑ confidentiality_of_channel ch) ->
+  jtypecheck Γ pc (JOutput ch e) Γ pc
+
+| JTJoin : forall Γ pc j Γ' l pc',
+    jtypecheck Γ pc j Γ' (l :: pc') ->
+    jtypecheck Γ pc (JThenJoin j) Γ' pc'
+            
+.
 
 
 (* Attempt at defining a statement that intertwines execution and typechecking *)
@@ -98,27 +149,47 @@ Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option
     exec_with_gamma
       ( Some (JSeq c1 c2), S, P, m, t ) Γ ls
       ev
-      ( Some (jcommand_of_command c2), S', P', m', t') Γ' []
+      ( Some c2, S', P', m', t') Γ' []
 
-| GIf : forall S P m t (c1 c2 : command) e v l Γ ls,
+| GIf : forall S P m t (c1 c2 : jcommand) e v l Γ ls,
   e ; m ⇓ v ->
   {{ Γ ⊢ e : l }} ->
   exec_with_gamma
     ( Some (JIfThenElse e c1 c2), S, P, m, t ) Γ ls
     None
-    ( Some (JThenJoin (if Nat.eqb v 0 then c2 else c1)), S, P, m, t ) Γ (l :: ls)
+    ( Some ((* JThenJoin  *) (if Nat.eqb v 0 then c2 else c1)), S, P, m, t ) Γ (l :: ls)
 
+| GJoin1 : forall j S P m t Γ pc j' S' P' m' t' Γ' pc' alpha,
+    exec_with_gamma
+      ( Some j, S, P, m, t ) Γ pc
+      alpha
+      ( Some j', S', P', m', t') Γ' pc' ->
+    exec_with_gamma
+      ( Some (JThenJoin j), S, P, m, t) Γ pc
+      alpha
+      ( Some (JThenJoin j'), S', P', m', t') Γ' pc'
+
+| GJoin2 : forall j S P m t Γ pc S' P' m' t' Γ' l pc' alpha,
+    exec_with_gamma
+      ( Some j, S, P, m, t ) Γ pc
+      alpha
+      ( None, S', P', m', t' ) Γ' (l :: pc') ->
+    exec_with_gamma
+      ( Some (JThenJoin j), S, P, m, t ) Γ pc
+      alpha
+      ( None, S', P', m', t') Γ' pc'
+(*    
 | GJoin : forall S P m t Γ l ls c,
     exec_with_gamma
       ( Some (JThenJoin c), S, P, m, t ) Γ (l :: ls)
       None
-      ( Some (jcommand_of_command c), S, P, m, t ) Γ ls
+      ( Some (jcommand_of_command c), S, P, m, t ) Γ ls *)
 
 | GWhile : forall S P m t c e Γ ls,
     exec_with_gamma
       ( Some (JWhile e c), S, P, m, t ) Γ ls
       None
-      ( Some (JIfThenElse e (c ;;; WHILE e DO c END) SKIP), S, P, m, t ) Γ ls
+      ( Some (JIfThenElse e (JSeq c (JWhile e c)) JSkip), S, P, m, t ) Γ ls
 
 | GInputPublic : forall S P m t x v Γ ls Γ',
     Γ' = <[ x := fold_left join ls LPublic ]> Γ ->
@@ -197,11 +268,11 @@ Inductive bridge : jconfig -> context -> list confidentiality -> nat -> option p
 .
 
 Inductive incomplete_bridge : jconfig -> context -> list confidentiality -> nat -> jconfig -> context -> list confidentiality -> Prop :=
-| IBridgeStop : forall c S P m t Γ ls,
+| IBridgeStop : forall jc Γ ls,
     incomplete_bridge
-      ( Some c, S, P, m, t ) Γ ls
+      jc Γ ls
       0
-      ( Some c, S, P, m, t ) Γ ls
+      jc Γ ls
 | IBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n c'' S'' P'' m'' t'' Γ'' ls'',
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
@@ -217,6 +288,14 @@ Inductive incomplete_bridge : jconfig -> context -> list confidentiality -> nat 
       ( c'', S'', P'', m'', t'' ) Γ'' ls''
 .
 
+Inductive bridges : jconfig -> context -> list confidentiality -> jconfig -> context -> list confidentiality -> Prop :=
+| LastBridge : forall jc Γ ls jc' Γ' ls' n,
+    incomplete_bridge jc Γ ls n jc' Γ' ls' -> bridges jc Γ ls jc' Γ' ls'
+| MoreBridge : forall jc Γ ls jc' Γ' ls' jc'' Γ'' ls'' n ev,
+    bridge jc Γ ls n ev jc' Γ' ls' ->
+    bridges jc' Γ' ls' jc'' Γ'' ls'' ->
+    bridges jc Γ ls jc'' Γ'' ls''
+.
 
 (* Inductive pevent : Type := *)
 (* | EmptyEvent *)
