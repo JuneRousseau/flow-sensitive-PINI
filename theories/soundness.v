@@ -75,12 +75,12 @@ Qed.
 
 
 (* executing implies executing with gammas *)
-Lemma can_exec_with_gamma Γ0 (* pc0 *) P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 :
+Lemma can_exec_with_gamma Γ0 pc0 P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 :
   wf_memory m0 Γ0 ->
   ( c0 , P0, S0, m0, t0 ) ---> (c1, P1, S1, m1, t1) ->
   exists j1 Γ1 pc1 ev,
     exec_with_gamma
-      ( option_map jcommand_of_command c0 , P0, S0, m0, t0 ) Γ0 []
+      ( option_map jcommand_of_command c0 , P0, S0, m0, t0 ) Γ0 [pc0]
       ev
       ( j1, P1, S1, m1, t1 ) Γ1 pc1  /\ option_map command_of_jcommand j1 = c1.
 Proof.
@@ -96,14 +96,109 @@ Proof.
   - inversion Hstep; subst.
     + apply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
       destruct j1 => //. repeat eexists. econstructor => //=.
-      inversion Ht. done. 
+      inversion Ht. simpl. rewrite command_id. done.
+    + apply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+      destruct j1 => //. repeat eexists. eapply GSeq2 => //.
+      simpl. rewrite command_id. done. 
+  - inversion Hstep; subst.
+    destruct (has_security_level _ _ _ _ H0 Hwf) as [l He].
+    eexists _,_,_,_. split. econstructor => //. simpl.
+    destruct (v =? 0)%nat; simpl; rewrite command_id => //.
+  - inversion Hstep; subst.
+    repeat eexists. econstructor. simpl. rewrite command_id. done.
+Qed.
+
+
+Lemma join_public l : join l LPublic = l.
+Proof. destruct l => //=. Qed.
+
+Lemma join_secret l : join l LSecret = LSecret.
+Proof. destruct l => //. Qed.
+
+Lemma fold_secret l : fold_left join l LSecret = LSecret.
+Proof. induction l => //. Qed.
+
+
+Lemma fold_start pc l : (fold_left join pc LPublic) ⊔ l = fold_left join pc l.
+Proof.
+  induction pc => //=. by destruct l. destruct a => //.
+  rewrite IHpc join_public => //. destruct l => //=.
+  destruct (fold_left join pc LSecret) => //. rewrite fold_secret => //.
+Qed.
+
+Lemma join_comm (l1 l2: confidentiality) : l1 ⊔ l2 = l2 ⊔ l1.
+Proof. destruct l1, l2 => //. Qed.
+
+Lemma fold_join pc l : fold_left join (l :: pc) LPublic = fold_left join pc LPublic ⊔ l.
+Proof. rewrite fold_start. simpl. by destruct l. Qed.
+
+Lemma jtype_adequacy Γ0 pc0 c0 Γf pc:
+  typecheck Γ0 pc0 c0 Γf ->
+  fold_left join pc LPublic = pc0 ->
+  jtypecheck Γ0 pc (jcommand_of_command c0) Γf pc.
+Proof.
+  intros Htype Hpc0.
+  generalize dependent Γ0. generalize dependent Γf. generalize dependent pc.
+  generalize dependent pc0.
+  induction c0; intros; simpl.
+  - inversion Htype; subst; by econstructor.
+  - inversion Htype; subst; econstructor => //.
+    rewrite - (fold_start pc le) join_comm. done.
+  - inversion Htype; subst; econstructor. eapply IHc0_1 => //. eapply IHc0_2 => //. 
+  - inversion Htype; subst; econstructor => //.
+    econstructor. eapply IHc0_1. done. rewrite fold_join. done. 
+    econstructor. eapply IHc0_2. done. by rewrite fold_join. 
+  - remember (WHILE e DO c0 END) as ee. induction Htype; try by inversion Heqee.
+    + inversion Heqee; subst; econstructor => //. eapply IHc0 => //. by rewrite fold_join.
+    + inversion Heqee; subst; econstructor => //. eapply IHc0 => //. by rewrite fold_join.
+      apply IHHtype2 => //.
+  - inversion Htype; subst; econstructor => //.
+    rewrite - (fold_start pc (confidentiality_of_channel _)). by rewrite join_comm.
+  - inversion Htype; subst; econstructor => //.
+    rewrite - (fold_start pc le). done.
+Qed. 
+    
+
+
+(* executing implies executing with gammas *)
+Lemma can_exec_with_gamma_typed Γ0 pc0 P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 Γf :
+  wf_memory m0 Γ0 ->
+  typecheck Γ0 pc0 c0 Γf ->
+  ( Some c0 , P0, S0, m0, t0 ) ---> (c1, P1, S1, m1, t1) ->
+  exists j1 Γ1 pc1 ev,
+    exec_with_gamma
+      ( Some (jcommand_of_command c0) , P0, S0, m0, t0 ) Γ0 [pc0]
+      ev
+      ( j1, P1, S1, m1, t1 ) Γ1 pc1  /\ option_map command_of_jcommand j1 = c1 /\
+      wf_memory m1 Γ1 /\
+      match j1 with Some j1 => exists pcf, jtypecheck Γ1 pc1 j1 Γf pcf | None => True end.
+Proof.
+  intros Hwf Hc0 Hstep.
+
+  generalize dependent c1; generalize dependent Γf.
+  induction c0; intros;
+    try by inversion Hstep; subst; repeat eexists; [econstructor | done | done | done].
+  - inversion Hstep; subst.
+    destruct (has_security_level _ _ _ _  H0 Hwf) as [l He].
+    repeat eexists. econstructor => //. all: try done.
+    intro x. destruct (s =? x) eqn:Hsx.
+    + apply String.eqb_eq in Hsx as ->.
+      rewrite lookup_insert. rewrite lookup_insert. done.
+    + apply String.eqb_neq in Hsx.       
+      rewrite lookup_insert_ne. done.
+      specialize (Hwf x).
+      destruct (m0 !! x) eqn:Hm0; rewrite Hm0 => //; rewrite lookup_insert_ne => //.
+  - inversion Hc0; subst. inversion Hstep; subst.
+    + eapply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht & Hm & Hc1); last exact H3.
+      destruct j1 => //. repeat eexists. econstructor => //=.
+      inversion Ht. simpl. rewrite command_id. done. done. simpl. econstructor. done. econstructor. done. 
     + apply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
       destruct j1 => //. repeat eexists. eapply GSeq2 => //.
       simpl. rewrite command_id. done. 
   - inversion Hstep; subst.
     destruct (has_security_level _ _ _ _ H0 Hwf) as [l He].
     eexists _,_,_,_. split. econstructor => //. done.
-Qed. 
+Qed.  *)
 
 (*
 (* executing implies executing with gammas *)
@@ -126,6 +221,49 @@ Proof.
     (* + admit. *)
 Admitted. *)
 
+
+
+ Lemma bridge_adequacy :
+   forall n c pc Γ Γf m S P t cf Sf Pf mf tf,
+     typecheck Γ pc c Γf ->
+     wf_memory m Γ ->
+     (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
+     exists j Γ' ls', bridges (Some (jcommand_of_command c), S, P, m, t) Γ [pc]
+               (j, Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j = cf.
+ Proof.
+   intro n.
+   induction n;
+     intros * Hc Hm Hred.
+   { inversion Hred; subst. repeat eexists. econstructor. econstructor. 
+     simpl. by rewrite command_id. }
+
+   inversion Hred; subst.
+   destruct y as [[[[c1 S1] P1] m1] t1].
+   destruct c1; last first.
+   - inversion H1; subst; last by inversion H.
+     eapply can_exec_with_gamma in H0 as (j1 & Γ1 & pc1 & ev & Hredg & Hj); last done.
+     destruct j1 => //.
+     destruct ev.
+     + repeat eexists. econstructor 2. apply BridgePublic. exact Hredg.
+       econstructor. econstructor. done.
+     + repeat eexists. econstructor 2. econstructor. exact Hredg.
+       econstructor. econstructor. done.
+   - eapply IHn in H1.
+     
+   eapply IHn in H1. 
+   destruct ev.
+   - repeat eexists. econstructor 2. apply BridgePublic. exact Hredg.
+     rewrite Hj. exact H1. lia.
+   - destruct n.
+     + destruct j1.
+       * right. inversion H1; subst.
+         repeat eexists. econstructor. exact Hredg. econstructor.
+       * left. simpl in Hj; subst. inversion H1; subst. repeat eexists.
+         econstructor. exact Hredg. instantiate (1 := 0). done. lia.
+     + destruct c1; last first.
+       { inversion H1. inversion H0. }
+       destruct j1 => //. inversion Hj; subst. 
+       assert (-{ Γ1, fold_left join pc1 LPublic ⊢ (command_of_jcommand j) ~> Γf }-).
  
  Lemma bridge_adequacy :
    forall n c pc Γ Γf m S P t cf Sf Pf mf tf,
@@ -160,14 +298,14 @@ Admitted. *)
          econstructor. exact Hredg. instantiate (1 := 0). done. lia.
      + destruct c1; last first.
        { inversion H1. inversion H0. }
-       destruct j1 => //. 
-       assert (-{ Γ1, fold_left join pc1 LPublic ⊢ c0 ~> Γf }-).
+       destruct j1 => //. inversion Hj; subst. 
+       assert (-{ Γ1, fold_left join pc1 LPublic ⊢ (command_of_jcommand j) ~> Γf }-).
        admit. 
        eapply IHn in H1 as
            [ (j1 & S' & P' & m' & t' & Γ' & ls' & ev & k & n' & Hbr & Hfollow) |
              (j1 & Γ' & ls & Hbr & Hj') ] => //.
        * left. repeat eexists. eapply BridgeMulti.
-         exact Hredg. exact Hbr. 
+         exact Hredg. rewrite command_id in Hbr. exact Hbr. 
          
    
  Admitted.
