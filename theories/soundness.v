@@ -156,10 +156,92 @@ Proof.
     rewrite - (fold_start pc (confidentiality_of_channel _)). by rewrite join_comm.
   - inversion Htype; subst; econstructor => //.
     rewrite - (fold_start pc le). done.
+Qed.
+
+Lemma expr_type_unique Γ e l1 l2:
+  {{ Γ ⊢ e : l1 }} -> {{ Γ ⊢ e : l2 }} -> l1 = l2.
+Proof.
+  intros He1 He2.
+  generalize dependent l1. generalize dependent l2.
+  induction e; intros; inversion He1; inversion He2; subst => //.
+  - rewrite H1 in H5. by inversion H5.
+  - rewrite (IHe1 ℓ0 H11 ℓ1 H4).
+    rewrite (IHe2 ℓ3 H12 ℓ2 H5). done.
 Qed. 
+
+
+
+Lemma final_gamma j0 P0 S0 m0 t0 Γ0 pc0 ev P1 S1 m1 t1 Γ1 pc1 Γf pcf:
+  jtypecheck Γ0 pc0 j0 Γf pcf ->
+  exec_with_gamma
+    ( Some j0 , P0, S0, m0, t0 ) Γ0 pc0
+    ev
+    ( None , P1, S1, m1, t1 ) Γ1 pc1 ->
+  Γf = Γ1 /\ pcf = pc1.
+Proof.
+  intros Hj0 Hexec.
+  generalize dependent pcf. generalize dependent pc1.
+  induction j0; intros; inversion Hj0; inversion Hexec; subst => //.
+  - split => //.
+    rewrite (expr_type_unique _ _ _ _ H3 H23). done.
+  - split => //.
+    rewrite fold_secret. done.
+  - apply (IHj0 _ H19) in H2. destruct H2 as [HΓ Hpc]. split => //.
+    by inversion Hpc.
+Qed. 
+
+
+
+Lemma wf_update m Γ x v vt :
+  wf_memory m Γ ->
+  wf_memory (<[ x := v ]> m) (<[ x := vt ]> Γ).
+Proof.
+Admitted.
+
+
+
+
+Lemma jtype_preservation j0 P0 S0 m0 t0 Γ0 pc0 j1 P1 S1 m1 t1 Γ1 pc1 ev Γf pcf :
+  wf_memory m0 Γ0 ->
+  jtypecheck Γ0 pc0 j0 Γf pcf ->
+  exec_with_gamma
+    ( Some j0 , P0, S0, m0, t0 ) Γ0 pc0
+    ev
+    ( j1 , P1, S1, m1, t1 ) Γ1 pc1 ->
+  wf_memory m1 Γ1 /\ match j1 with Some j1 => jtypecheck Γ1 pc1 j1 Γf pcf | None => True end.
+Proof.
+  intros Hm0 Hj0 Hexec.
+  generalize dependent j1. generalize dependent Γf. generalize dependent pcf.
+  generalize dependent pc1.
+  induction j0; intros.
+  - inversion Hexec; subst => //.
+  - inversion Hexec; subst. split => //. by apply wf_update.
+  - inversion Hj0; subst. inversion Hexec; subst. 
+    + eapply IHj0_1 in H17 as [Hm1 Hc1'] => //.
+      split => //.
+      econstructor => //.
+    + assert (Hexec' := H17). eapply IHj0_1 in H17 as [Hm1 _] => //.
+      split => //.
+      eapply final_gamma in Hexec' => //. destruct Hexec' as [-> ->].
+      done.
+  - inversion Hexec; subst => //. inversion Hj0; subst => //. split => //.
+    destruct (v =? 0)%nat.
+    + admit.
+    + admit.
+  - inversion Hexec; subst => //. split => //. inversion Hj0; subst => //.
+    + admit.
+    + admit.
+  - inversion Hexec; subst => //; split => //; by apply wf_update.
+  - inversion Hexec; subst => //.
+  - inversion Hj0; subst => //. inversion Hexec; subst => //.
+    + eapply IHj0 in H15 as [Hm1 Hj'] => //. split => //.
+      econstructor. done.
+    + split => //. eapply IHj0 in H15 as [Hm1 _] => //.
+Admitted.
+
     
 
-
+(*
 (* executing implies executing with gammas *)
 Lemma can_exec_with_gamma_typed Γ0 pc0 P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 Γf :
   wf_memory m0 Γ0 ->
@@ -198,7 +280,7 @@ Proof.
   - inversion Hstep; subst.
     destruct (has_security_level _ _ _ _ H0 Hwf) as [l He].
     eexists _,_,_,_. split. econstructor => //. done.
-Qed.  *)
+Qed.  *) 
 
 (*
 (* executing implies executing with gammas *)
