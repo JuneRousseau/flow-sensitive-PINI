@@ -158,6 +158,72 @@ Proof.
     rewrite - (fold_start pc le). done.
 Qed.
 
+
+Lemma jtype_pcf_while Γ0 pc0 e c Γf pcf:
+  jtypecheck Γ0 pc0 (jcommand_of_command (WHILE e DO c END)) Γf pcf ->
+  pc0 = pcf.
+Proof.
+  intros Hj.
+  remember (jcommand_of_command (WHILE e DO c END)) as j.
+  induction Hj; inversion Heqj; subst => //.
+  apply IHHj2 => //.
+Qed.
+  
+Lemma jtype_pcf Γ0 pc0 c Γf pcf:
+  jtypecheck Γ0 pc0 (jcommand_of_command c) Γf pcf ->
+  pc0 = pcf.
+Proof.
+  intro Hc.
+  generalize dependent Γ0; generalize dependent pc0.
+  generalize dependent Γf; generalize dependent pcf.
+  induction c; intros; inversion Hc; subst => //.
+  - apply IHc1 in H3. apply IHc2 in H6. by subst.
+  - inversion H7; subst. (* inversion H8; subst. *)
+    apply IHc1 in H2. (* apply IHc2 in H3. *)
+    by inversion H2.
+  - by eapply jtype_pcf_while.
+Qed.
+
+(*
+Lemma jtype_adequacy_reverse_while Γ0 pc0 e c Γf pcf:
+  jtypecheck Γ0 pc0 (jcommand_of_command (WHILE e DO c END)) Γf pcf ->
+  typecheck Γ0 (fold_left join pc0 LPublic) (WHILE e DO c END) Γf.
+Proof.
+  intros Hj.
+  remember (jcommand_of_command (WHILE e DO c END)) as j.
+  induction Hj; inversion Heqj; subst => //. *)
+ 
+Lemma jtype_adequacy_reverse Γ0 pc0 c0 Γf pcf:
+  jtypecheck Γ0 pc0 (jcommand_of_command c0) Γf pcf ->
+  typecheck Γ0 (fold_left join pc0 LPublic) c0 Γf.
+Proof.
+  intros Hc0.
+  generalize dependent Γf; generalize dependent pcf.
+  generalize dependent Γ0; generalize dependent pc0.
+  induction c0; intros. 
+  - inversion Hc0; subst. econstructor.
+  - inversion Hc0; subst. econstructor. done.
+    rewrite - (fold_start pcf le) join_comm. done.
+  - inversion Hc0; subst. econstructor.
+    eapply IHc0_1 => //. eapply IHc0_2 => //.
+    apply jtype_pcf in H3 as ->. done.
+  - inversion Hc0; subst. inversion H7; subst.
+    inversion H8; subst. econstructor => //.
+    + apply IHc0_1 in H2. by rewrite fold_join in H2.
+    + apply IHc0_2 in H3. by rewrite fold_join in H3.
+  - remember (jcommand_of_command (WHILE e DO c0 END)) as j.
+    induction Hc0; inversion Heqj; subst.
+    + econstructor => //. apply IHc0 in Hc0.
+      by rewrite fold_join in Hc0.
+    + econstructor => //.
+      * apply IHc0 in Hc0_1. by rewrite fold_join in Hc0_1.
+      * by apply IHHc0_2.
+  - inversion Hc0; subst. econstructor => //.
+    rewrite - fold_start join_comm. done.
+  - inversion Hc0; subst. econstructor => //.
+    rewrite fold_start. done.
+Qed.
+
 Lemma expr_type_unique Γ e l1 l2:
   {{ Γ ⊢ e : l1 }} -> {{ Γ ⊢ e : l2 }} -> l1 = l2.
 Proof.
@@ -214,9 +280,9 @@ Proof.
   generalize dependent j1. generalize dependent Γf. generalize dependent pcf.
   generalize dependent pc1.
   induction j0; intros.
-  - inversion Hexec; subst => //.
-  - inversion Hexec; subst. split => //. by apply wf_update.
-  - inversion Hj0; subst. inversion Hexec; subst. 
+  - (* Skip *) inversion Hexec; subst => //.
+  - (* Assign *) inversion Hexec; subst. split => //. by apply wf_update.
+  - (* Seq *) inversion Hj0; subst. inversion Hexec; subst. 
     + eapply IHj0_1 in H17 as [Hm1 Hc1'] => //.
       split => //.
       econstructor => //.
@@ -224,7 +290,7 @@ Proof.
       split => //.
       eapply final_gamma in Hexec' => //. destruct Hexec' as [-> ->].
       done.
-  - inversion Hexec; subst => //. inversion Hj0; subst => //. split => //.
+  - (* IfThenElse *) inversion Hexec; subst => //. inversion Hj0; subst => //. split => //.
     destruct (v =? 0)%nat.
     + admit.
     + admit.
