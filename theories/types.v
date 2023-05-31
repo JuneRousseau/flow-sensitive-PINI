@@ -22,6 +22,28 @@ Definition join l1 l2 :=
 #[export] Instance join_confidentiality : Join confidentiality.
 Proof. exact join. Defined.
 
+Lemma join_public l : join l LPublic = l.
+Proof. destruct l => //=. Qed.
+
+Lemma join_secret l : join l LSecret = LSecret.
+Proof. destruct l => //. Qed.
+
+Lemma fold_secret l : fold_left join l LSecret = LSecret.
+Proof. induction l => //. Qed.
+
+Lemma fold_start pc l : (fold_left join pc LPublic) ⊔ l = fold_left join pc l.
+Proof.
+  induction pc => //=. by destruct l. destruct a => //.
+  rewrite IHpc join_public => //. destruct l => //=.
+  destruct (fold_left join pc LSecret) => //. rewrite fold_secret => //.
+Qed.
+
+Lemma join_comm (l1 l2: confidentiality) : l1 ⊔ l2 = l2 ⊔ l1.
+Proof. destruct l1, l2 => //. Qed.
+
+Lemma fold_join pc l : fold_left join (l :: pc) LPublic = fold_left join pc LPublic ⊔ l.
+Proof. rewrite fold_start. simpl. by destruct l. Qed.
+
 Definition flows l1 l2 :=
   match l1, l2 with
   | LSecret, LPublic => False
@@ -31,7 +53,6 @@ Definition flows l1 l2 :=
 (* Allow to use the notation "l1 '⊑' l2" *)
 #[export] Instance sqsubseteq_confidentiality : SqSubsetEq confidentiality.
 Proof. exact flows. Defined.
-
 
 (* typing environment *)
 Definition context := gmap var confidentiality.
@@ -66,7 +87,23 @@ Definition flows_context (gamma1 gamma2 : context) : Prop :=
        | Some l1, Some l2 => flows l1 l2
        | None, None => True
        | _,_ => False end.
-       
+
+Lemma join_context_self Γ : Γ = Γ ⊔g Γ.
+Proof.
+Admitted.
+
+Lemma flows_context_bigger Γ Γ' : flows_context Γ (Γ ⊔g Γ').
+Proof.
+  intros x. destruct (Γ !! x) eqn:Hx => //.
+Admitted.
+
+Lemma flows_context_refl Γ : flows_context Γ Γ.
+Proof. intros x. destruct (Γ !! x) => //. destruct c => //. Qed.
+
+Lemma join_context_comm Γ1 Γ2 : Γ1 ⊔g Γ2 = Γ2 ⊔g Γ1.
+Proof.
+Admitted.
+
 
 Reserved Notation "'{{' Γ '⊢' e ':' ℓ '}}'" (at level 10, Γ at level 50, e at level 99).
 Inductive typecheck_expr : context -> expr -> confidentiality -> Prop :=

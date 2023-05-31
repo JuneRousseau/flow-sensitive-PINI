@@ -73,6 +73,26 @@ Fixpoint flows_pc pc1 pc2 :=
   | [], [] => True
   | _, _ => False end.
 
+Lemma flows_pc_refl pc : flows_pc pc pc.
+Proof. induction pc => //=. split => //. destruct a => //. Qed.
+
+Lemma flows_pc_trans pc0 pc1 pc2:
+  flows_pc pc0 pc1 ->
+  flows_pc pc1 pc2 ->
+  flows_pc pc0 pc2.
+Proof.
+  intros H1 H2.
+  generalize dependent pc2; generalize dependent pc1.
+  induction pc0; intros => //=.
+  - destruct pc2 => //. destruct pc1 => //.
+  - destruct pc2 => //. destruct pc1 => //.
+    destruct pc1 => //.
+    destruct H1 as [? H1].
+    destruct H2 as [? H2].
+    split; first by destruct a, c0, c.
+    eapply IHpc0 => //.
+Qed.
+
 Fixpoint join_pc pc1 pc2 :=
   match pc1, pc2 with
   | l1 :: pc1, l2 :: pc2 =>
@@ -83,8 +103,90 @@ Fixpoint join_pc pc1 pc2 :=
   | [], [] => Some []
   | _, _ => None
   end.
-                       
 
+Lemma join_pc_comm pc1 pc2: join_pc pc1 pc2 = join_pc pc2 pc1.
+Proof. generalize dependent pc2. induction pc1; intros; destruct pc2 => //=.
+       rewrite IHpc1. destruct (join_pc pc2 pc1), a, c => //. Qed.
+
+Lemma join_pc_idem pc : join_pc pc pc = Some pc.
+Proof. induction pc => //=. rewrite IHpc. destruct a => //. Qed.
+
+Lemma flows_join_pc pc0 pc1 pc2 pcj :
+  flows_pc pc0 pc1 ->
+  flows_pc pc0 pc2 ->
+  join_pc pc1 pc2 = Some pcj ->
+  flows_pc pc0 pcj.
+Proof.
+  intros Hpc1 Hpc2 Hpcj.
+  generalize dependent pc1; generalize dependent pc2; generalize dependent pcj.
+  induction pc0; intros => //=.
+  - destruct pc1, pc2, pcj => //.
+  - destruct pc1, pc2, pcj => //.
+    simpl in Hpcj. destruct (join_pc pc1 pc2) => //.
+    destruct Hpc2 as [??]. destruct Hpc1 as [??].
+    simpl in Hpcj.
+    destruct (join_pc pc1 pc2) eqn:Hpc => //.
+    inversion Hpcj; subst.
+    split. destruct a,c,c0 => //.
+    eapply IHpc0. 3:exact Hpc. done. done.
+Qed.
+
+Lemma flows_pc_bigger pc pc' pcj:
+  join_pc pc pc' = Some pcj ->
+  flows_pc pc pcj.
+Proof.
+  intros Hpc.
+  generalize dependent pc'; generalize dependent pcj.
+  induction pc; intros => //=; destruct pcj, pc' => //.
+  - simpl in Hpc. destruct (join_pc pc pc') => //.
+  - simpl in Hpc. destruct (join_pc pc pc') eqn:Hpc' => //.
+    inversion Hpc; subst.
+    split; first by destruct a, c0.
+    eapply IHpc => //.
+Qed.
+
+Lemma flows_pc_fold pc0 pc1 :
+  flows_pc pc0 pc1 ->
+  flows (fold_left join pc0 LPublic) (fold_left join pc1 LPublic).
+Proof.
+  intros Hpc.
+  generalize dependent pc1.
+  induction pc0; intros => //=.
+  destruct pc1 => //=.
+  destruct Hpc as [Hac Hpc].
+  rewrite - fold_start.
+  rewrite - (fold_start pc1 _).
+  apply IHpc0 in Hpc.
+  destruct (fold_left join pc0 _), (fold_left join pc1 _), a, c => //.
+ Qed.
+
+ Lemma flows_fold pcs0 pcs1 pc0 pc1 :
+   flows pc0 pc1 ->
+   flows_pc pcs0 pcs1 ->
+   flows (fold_left join pcs0 pc0) (fold_left join pcs1 pc1).
+ Proof.
+   intros Hpc Hpcs.
+   rewrite - fold_start.
+   rewrite - (fold_start pcs1 pc1).
+   apply flows_pc_fold in Hpcs.
+   destruct (fold_left join pcs0 LPublic), (fold_left join pcs1 LPublic), pc0, pc1 => //.
+ Qed.
+
+ Lemma flows_add Γ0 Γ1 x pc0 pc1 :
+   flows_context Γ0 Γ1 ->
+   flows pc0 pc1 ->
+   flows_context (<[ x := pc0 ]> Γ0) (<[ x := pc1 ]> Γ1).
+ Proof.
+   intros Hcontext Hpc y.
+   destruct (x =? y) eqn:Hxy.
+   - apply String.eqb_eq in Hxy as ->.
+     repeat rewrite lookup_insert. done.
+   - apply String.eqb_neq in Hxy.
+     rewrite lookup_insert_ne => //.
+     specialize (Hcontext y).
+     destruct (Γ0 !! y) eqn:Hy; rewrite Hy;
+       rewrite lookup_insert_ne => //.
+ Qed.
 
 Inductive jtypecheck : context -> list confidentiality -> jcommand -> context -> list confidentiality -> Prop :=
 | JTSkip : forall Γ pc Γf pcf,
