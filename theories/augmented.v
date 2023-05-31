@@ -73,6 +73,18 @@ Fixpoint flows_pc pc1 pc2 :=
   | [], [] => True
   | _, _ => False end.
 
+Fixpoint join_pc pc1 pc2 :=
+  match pc1, pc2 with
+  | l1 :: pc1, l2 :: pc2 =>
+      match join_pc pc1 pc2 with
+      | Some pc => Some (join l1 l2 :: pc)
+      | None => None
+      end
+  | [], [] => Some []
+  | _, _ => None
+  end.
+                       
+
 
 Inductive jtypecheck : context -> list confidentiality -> jcommand -> context -> list confidentiality -> Prop :=
 | JTSkip : forall Γ pc Γf pcf,
@@ -92,17 +104,28 @@ Inductive jtypecheck : context -> list confidentiality -> jcommand -> context ->
   jtypecheck Γ2 pc2 c2 Γ3 pc3 ->
   jtypecheck Γ1 pc1 (JSeq c1 c2) Γ3 pc3
 
-| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2,
+| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2 pc1 pc2 pcf,
   {{ Γ ⊢ e : l }} ->
-  jtypecheck Γ (l :: pc) c1 Γ1 pc ->
-  jtypecheck Γ (l :: pc) c2 Γ2 pc ->
-  jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pc (* pc1 TO FIX must include pc2 *)
+  jtypecheck Γ (l :: pc) c1 Γ1 pc1 ->
+  jtypecheck Γ (l :: pc) c2 Γ2 pc2 ->
+  join_pc pc1 pc2 = Some pcf ->
+  jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pcf (* pc1 TO FIX must include pc2 *)
 (*| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2 pc1 pc2,
   {{ Γ ⊢ e : l }} ->
   jtypecheck Γ (l :: pc) c1 Γ1 pc1 ->
   jtypecheck Γ (l :: pc) c2 Γ2 pc2 ->
   jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pc1 (* pc1 TO FIX must include pc2 *)
-*)
+ *)
+
+| JTWhile : forall l Γ pc e c Γ' pc',
+    flows_context Γ Γ' ->
+    flows_pc pc pc' ->
+    {{ Γ' ⊢ e : l }} ->
+    jtypecheck Γ' (l :: pc') c Γ' (l :: pc') ->
+    jtypecheck Γ pc (JWhile e c) Γ' pc'
+             
+
+             (*
 (* Does not change the environment *)
 | JTWhile1 : forall l Γ pc e c,
   {{ Γ ⊢ e : l }} ->
@@ -115,6 +138,8 @@ Inductive jtypecheck : context -> list confidentiality -> jcommand -> context ->
   jtypecheck Γ (l :: pc) c Γ'' pc'' ->
   jtypecheck Γ'' pc (JWhile e c) Γ' pc' ->
   jtypecheck Γ pc (JWhile e c) Γ' pc'
+*)
+
 
 | JTInput : forall Γ pc x ch Γ' pcf,
   (fold_left join pc LPublic ⊑ confidentiality_of_channel ch) ->
