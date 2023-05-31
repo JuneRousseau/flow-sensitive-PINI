@@ -28,6 +28,15 @@ Inductive jcommand :=
 | JThenJoin : jcommand -> jcommand 
 .
 
+
+(* Fixpoint level j :=
+  match j with
+  | JSkip | JAssign _ => 0
+  |  *)
+
+
+
+
 Fixpoint jcommand_of_command c :=
   match c with
   | CSkip => JSkip
@@ -58,27 +67,42 @@ Proof. intros. induction c => //=; try by rewrite IHc1 IHc2. by rewrite IHc. Qed
 Definition jconfig : Type :=
   (option jcommand) * (Stream value) * (Stream value) * memory * trace.
 
+Fixpoint flows_pc pc1 pc2 :=
+  match pc1, pc2 with
+  | l1 :: pc1, l2 :: pc2 => flows l1 l2 /\ flows_pc pc1 pc2
+  | [], [] => True
+  | _, _ => False end.
+
 
 Inductive jtypecheck : context -> list confidentiality -> jcommand -> context -> list confidentiality -> Prop :=
-| JTSkip : forall Γ pc,
-    jtypecheck Γ pc JSkip Γ pc
+| JTSkip : forall Γ pc Γf pcf,
+    flows_context Γ Γf ->
+    flows_pc pc pcf ->
+    jtypecheck Γ pc JSkip Γf pcf
 
-| JTAssign : forall le Γ pc x e Γ',
+| JTAssign : forall le Γ pc x e Γ' pcf,
     {{ Γ ⊢ e : le }} ->
-    Γ' = <[ x := fold_left join pc le ]> Γ ->
-    jtypecheck Γ pc (JAssign x e) Γ' pc
+    flows_context (<[ x := fold_left join pc le ]> Γ) Γ' ->
+    flows_pc pc pcf ->
+    jtypecheck Γ pc (JAssign x e) Γ' pcf
 
 | JTSeq : forall (Γ1 Γ2 Γ3 : context) pc1 pc2 pc3 c1 c2,
-  jtypecheck Γ1 pc1 c1 Γ2 pc2 ->
+    jtypecheck Γ1 pc1 c1 Γ2 pc2 ->
+(*    flows_context Γ2 Γ2' -> *)
   jtypecheck Γ2 pc2 c2 Γ3 pc3 ->
   jtypecheck Γ1 pc1 (JSeq c1 c2) Γ3 pc3
 
-| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2 pc1 pc2,
+| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2,
+  {{ Γ ⊢ e : l }} ->
+  jtypecheck Γ (l :: pc) c1 Γ1 pc ->
+  jtypecheck Γ (l :: pc) c2 Γ2 pc ->
+  jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pc (* pc1 TO FIX must include pc2 *)
+(*| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2 pc1 pc2,
   {{ Γ ⊢ e : l }} ->
   jtypecheck Γ (l :: pc) c1 Γ1 pc1 ->
   jtypecheck Γ (l :: pc) c2 Γ2 pc2 ->
   jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pc1 (* pc1 TO FIX must include pc2 *)
-
+*)
 (* Does not change the environment *)
 | JTWhile1 : forall l Γ pc e c,
   {{ Γ ⊢ e : l }} ->
@@ -92,15 +116,18 @@ Inductive jtypecheck : context -> list confidentiality -> jcommand -> context ->
   jtypecheck Γ'' pc (JWhile e c) Γ' pc' ->
   jtypecheck Γ pc (JWhile e c) Γ' pc'
 
-| JTInput : forall Γ pc x ch Γ',
+| JTInput : forall Γ pc x ch Γ' pcf,
   (fold_left join pc LPublic ⊑ confidentiality_of_channel ch) ->
-  Γ' = <[ x := (fold_left join pc (confidentiality_of_channel ch)) ]> Γ ->
-  jtypecheck Γ pc (JInput ch x) Γ' pc
+  flows_context ( <[ x := (fold_left join pc (confidentiality_of_channel ch)) ]> Γ) Γ' ->
+  flows_pc pc pcf ->
+  jtypecheck Γ pc (JInput ch x) Γ' pcf
 
-| JTOutput : forall le Γ pc e ch,
+| JTOutput : forall le Γ pc e ch Γf pcf,
   {{ Γ ⊢ e : le }} ->
   (fold_left join pc le ⊑ confidentiality_of_channel ch) ->
-  jtypecheck Γ pc (JOutput ch e) Γ pc
+  flows_context Γ Γf ->
+  flows_pc pc pcf ->
+  jtypecheck Γ pc (JOutput ch e) Γf pcf
 
 | JTJoin : forall Γ pc j Γ' l pc',
     jtypecheck Γ pc j Γ' (l :: pc') ->
