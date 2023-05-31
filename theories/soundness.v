@@ -135,6 +135,9 @@ Proof. rewrite fold_start. simpl. by destruct l. Qed.
 Lemma flows_pc_refl pc : flows_pc pc pc.
 Proof. induction pc => //=. split => //. destruct a => //. Qed.
 
+Lemma join_pc_idem pc : join_pc pc pc = Some pc.
+Proof. induction pc => //=. rewrite IHpc. destruct a => //. Qed.
+
 Lemma jtype_adequacy Γ0 pc0 c0 Γf pc:
   typecheck Γ0 pc0 c0 Γf ->
   fold_left join pc LPublic = pc0 ->
@@ -151,7 +154,8 @@ Proof.
     eapply IHc0_1 => //. eapply IHc0_2 => //. 
   - (* IfThenElse *) inversion Htype; subst; econstructor => //.
     econstructor. eapply IHc0_1. done. rewrite fold_join. done. 
-    econstructor. eapply IHc0_2. done. by rewrite fold_join. 
+    econstructor. eapply IHc0_2. done. by rewrite fold_join.
+    by apply join_pc_idem.
   - (* While *) remember (WHILE e DO c0 END) as ee. induction Htype; try by inversion Heqee.
     + inversion Heqee; subst; econstructor => //. eapply IHc0 => //. by rewrite fold_join.
     + inversion Heqee; subst; econstructor => //. eapply IHc0 => //. by rewrite fold_join.
@@ -189,6 +193,26 @@ Proof.
     destruct H2 as [? H2].
     split; first by destruct a, c0, c.
     eapply IHpc0 => //.
+Qed.
+
+Lemma flows_join_pc pc0 pc1 pc2 pcj :
+  flows_pc pc0 pc1 ->
+  flows_pc pc0 pc2 ->
+  join_pc pc1 pc2 = Some pcj ->
+  flows_pc pc0 pcj.
+Proof.
+  intros Hpc1 Hpc2 Hpcj.
+  generalize dependent pc1; generalize dependent pc2; generalize dependent pcj.
+  induction pc0; intros => //=.
+  - destruct pc1, pc2, pcj => //.
+  - destruct pc1, pc2, pcj => //.
+    simpl in Hpcj. destruct (join_pc pc1 pc2) => //.
+    destruct Hpc2 as [??]. destruct Hpc1 as [??].
+    simpl in Hpcj.
+    destruct (join_pc pc1 pc2) eqn:Hpc => //.
+    inversion Hpcj; subst.
+    split. destruct a,c,c0 => //.
+    eapply IHpc0. 3:exact Hpc. done. done.
 Qed. 
   
 Lemma jtype_pcf Γ0 pc0 c Γf pcf:
@@ -200,9 +224,10 @@ Proof.
   generalize dependent Γf; generalize dependent pcf.
   induction c; intros; inversion Hc; subst => //; try by eapply flows_pc_refl.
   - apply IHc1 in H3. apply IHc2 in H6. by eapply flows_pc_trans.
-(*  - inversion H7; subst. (* inversion H8; subst. *)
-    apply IHc1 in H2. (* apply IHc2 in H3. *)
-    by inversion H2. *)
+  - inversion H5; subst. inversion H8; subst. 
+    apply IHc1 in H3. apply IHc2 in H4.
+    destruct H3 as [? H3]. destruct H4 as [? H4].
+    eapply flows_join_pc; last done. done. done. 
   - apply jtype_pcf_while in Hc as -> ; eapply flows_pc_refl.
 Qed.
 
@@ -294,6 +319,36 @@ Qed.
  Proof. intros x. destruct (Γ !! x) => //. destruct c => //. Qed.
 
 
+ Lemma join_context_self Γ : Γ = Γ ⊔g Γ.
+ Proof.
+ Admitted. 
+
+ Lemma flows_pc_bigger pc pc' pcj:
+   join_pc pc pc' = Some pcj ->
+   flows_pc pc pcj.
+ Proof.
+   intros Hpc.
+   generalize dependent pc'; generalize dependent pcj.
+   induction pc; intros => //=; destruct pcj, pc' => //.
+   - simpl in Hpc. destruct (join_pc pc pc') => //.
+   - simpl in Hpc. destruct (join_pc pc pc') eqn:Hpc' => //.
+     inversion Hpc; subst.
+     split; first by destruct a, c0.
+     eapply IHpc => //.
+ Qed.
+
+ Lemma join_pc_comm pc1 pc2: join_pc pc1 pc2 = join_pc pc2 pc1.
+ Proof. generalize dependent pc2. induction pc1; intros; destruct pc2 => //=.
+        rewrite IHpc1. destruct (join_pc pc2 pc1), a, c => //. Qed. 
+
+ Lemma flows_context_bigger Γ Γ' : flows_context Γ (Γ ⊔g Γ').
+ Proof.
+   intros x. destruct (Γ !! x) eqn:Hx => //.
+ Admitted.
+
+ Lemma join_context_comm Γ1 Γ2 : Γ1 ⊔g Γ2 = Γ2 ⊔g Γ1.
+ Proof.
+ Admitted. 
 
  
 Lemma typecheck_flow Γ0 Γ1 pc0 pc1 c Γf0 pcf0 Γf1 pcf1 :
@@ -325,8 +380,20 @@ Proof.
     eapply IHc1 in H3 => //. apply flows_pc_refl. apply flows_context_refl.
     eapply IHc2 in H6 => //. apply flows_pc_refl. apply flows_context_refl. 
   - (* If *) inversion Hc; subst. 
-    destruct (expr_type_flows _ _ _ _ Hcontext H4) as (l0 & Hl0 & He).
-    econstructor => //. eapply IHc1.
+    destruct (expr_type_flows _ _ _ _ Hcontext H2) as (l0 & Hl0 & He).
+    rewrite (join_context_self Γf0). econstructor => //.
+    3:{ by apply join_pc_idem. }
+    + eapply IHc1. instantiate (1 := l :: _).
+      simpl. split => //. done. 3:exact H5. eapply flows_pc_trans => //.
+      eapply flows_pc_bigger. done. eapply flows_context_trans => //.
+      eapply flows_context_bigger.
+    + eapply IHc2. instantiate (1 := l :: _).
+      simpl. split => //. done. 3:exact H8. eapply flows_pc_trans => //.
+      eapply flows_pc_bigger. by rewrite join_pc_comm. eapply flows_context_trans => //.
+      rewrite join_context_comm. eapply flows_context_bigger.
+  - (* While *) inversion Hc; subst.
+    + destruct (expr_type_flows _ _ _ _ Hcontext H3) as (l0 & Hl0 & He).
+      econstructor => //. eapply IHc => //. 
 
 
 Lemma typecheck_flow Γ0 Γ1 pc0 pc1 c Γf pcf :
