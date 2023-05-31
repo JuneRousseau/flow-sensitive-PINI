@@ -35,7 +35,7 @@ Proof. exact flows. Defined.
 
 (* typing environment *)
 Definition context := gmap var confidentiality.
-Definition empty_content : context := gmap_empty.
+Definition empty_context : context := gmap_empty.
 
 (* We say that a memory is well-formed w.r.t a context if all they define the
    same variables *)
@@ -60,6 +60,14 @@ Definition join_context (gamma1 gamma2 : context) : context :=
     gamma1 gamma2.
 Notation "g1 '⊔g' g2" := (join_context g1 g2) (at level 40).
 
+
+Definition flows_context (gamma1 gamma2 : context) : Prop :=
+  forall x, match gamma1 !! x, gamma2 !! x with
+       | Some l1, Some l2 => flows l1 l2
+       | None, None => True
+       | _,_ => False end.
+       
+
 Reserved Notation "'{{' Γ '⊢' e ':' ℓ '}}'" (at level 10, Γ at level 50, e at level 99).
 Inductive typecheck_expr : context -> expr -> confidentiality -> Prop :=
 | TLit : forall Γ n, {{ Γ ⊢ (ELit n) : LPublic }}
@@ -81,16 +89,18 @@ Definition confidentiality_of_channel (ch : channel) : confidentiality :=
 Reserved Notation "-{ Γ ',' pc '⊢' e '~>' Γ2 }-"
   (at level 10, Γ at level 55, Γ2 at level 50, pc at level 35, e at level 99).
 Inductive typecheck : context -> confidentiality -> command -> context -> Prop :=
-| TSkip : forall Γ pc,
-  -{ Γ, pc ⊢ CSkip ~> Γ }-
+| TSkip : forall Γ pc Γf,
+    flows_context Γ Γf ->
+  -{ Γ, pc ⊢ CSkip ~> Γf }-
 
 | TAssign : forall le Γ pc x e Γ',
   {{ Γ ⊢ e : le }} ->
-  Γ' = <[ x := (le ⊔ pc) ]> Γ ->
+  flows_context (<[ x := (le ⊔ pc) ]> Γ) Γ' ->
   -{ Γ, pc ⊢ (CAssign x e) ~> Γ' }-
 
 | TSeq : forall (Γ1 Γ2 Γ3 : context) pc c1 c2,
-  -{ Γ1, pc ⊢ c1 ~> Γ2 }- ->
+    -{ Γ1, pc ⊢ c1 ~> Γ2 }- ->
+(*    flows_context Γ2 Γ2' -> *)
   -{ Γ2, pc ⊢ c2 ~> Γ3 }- ->
   -{ Γ1, pc ⊢ (CSeq c1 c2) ~> Γ3 }-
 
@@ -115,12 +125,13 @@ Inductive typecheck : context -> confidentiality -> command -> context -> Prop :
 
 | TInput : forall Γ pc x ch Γ',
   (pc ⊑ confidentiality_of_channel ch) ->
-  Γ' = <[ x := ((confidentiality_of_channel ch) ⊔ pc) ]> Γ ->
+  flows_context ( <[ x := ((confidentiality_of_channel ch) ⊔ pc) ]> Γ) Γ' ->
   -{ Γ, pc ⊢ (CInput ch x) ~> Γ' }-
 
-| TOutput : forall le Γ pc e ch,
+| TOutput : forall le Γ pc e ch Γ',
   {{ Γ ⊢ e : le }} ->
   ((pc ⊔ le) ⊑ confidentiality_of_channel ch) ->
-  -{ Γ, pc ⊢ (COutput ch e) ~> Γ }-
+  flows_context Γ Γ' ->
+  -{ Γ, pc ⊢ (COutput ch e) ~> Γ' }-
 where "-{ Γ ',' pc '⊢' e '~>' Γ2 }-" := (typecheck Γ pc e Γ2)
 .
