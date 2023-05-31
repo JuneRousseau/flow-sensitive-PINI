@@ -54,6 +54,12 @@ Definition flows l1 l2 :=
 #[export] Instance sqsubseteq_confidentiality : SqSubsetEq confidentiality.
 Proof. exact flows. Defined.
 
+#[export] Instance reflexive_flows : Reflexive flows.
+Proof. intro. destruct x => //. Defined.
+
+#[export] Instance transitive_flows : Transitive flows.
+Proof. intros x y z. destruct x, y,z => //. Defined.
+
 (* typing environment *)
 Definition context := gmap var confidentiality.
 Definition empty_context : context := gmap_empty.
@@ -70,7 +76,7 @@ Definition wf_memory (m : memory) (Γ : context) : Prop :=
 
 (* Joining two contexts, to be used after an If-statement *)
 Definition join_context (gamma1 gamma2 : context) : context :=
-  gmap_merge _ _ _
+  merge
     (fun opt1 opt2 =>
        match opt1, opt2 with
        | Some l1, Some l2 => Some (l1 ⊔ l2)
@@ -81,29 +87,53 @@ Definition join_context (gamma1 gamma2 : context) : context :=
     gamma1 gamma2.
 Notation "g1 '⊔g' g2" := (join_context g1 g2) (at level 40).
 
-
 Definition flows_context (gamma1 gamma2 : context) : Prop :=
   forall x, match gamma1 !! x, gamma2 !! x with
        | Some l1, Some l2 => flows l1 l2
        | None, None => True
        | _,_ => False end.
+Notation "g1 '⊑g' g2" := (flows_context g1 g2) (at level 40).
 
-Lemma join_context_self Γ : Γ = Γ ⊔g Γ.
+#[export] Instance reflexive_flows_context : Reflexive flows_context.
+Proof. intros Γ x. destruct (Γ !! x) => //. Defined.
+
+#[export] Instance transitive_flows_context : Transitive flows_context.
+Proof. intros Γ1 Γ2 Γ3 H12 H23 x.
+       specialize (H12 x); specialize (H23 x).
+       destruct (Γ1 !! x), (Γ2 !! x), (Γ3 !! x) => //.
+       by transitivity c0.
+Defined.
+
+Lemma join_context_self (Γ : context) : Γ = Γ ⊔g Γ.
 Proof.
+  unfold join_context.
+  rewrite merge_idemp ; [| done].
+  intros i.
+  destruct (Γ !! i) eqn:Heq.
+  rewrite Heq. destruct c => //.
+  by rewrite Heq.
+Qed.
+
+Lemma flows_context_join Γ Γ' : Γ ⊑g (Γ ⊔g Γ').
+Proof.
+  intros x.
+  destruct (Γ !! x) eqn:Hx => //;
+  destruct ((Γ ⊔g Γ') !! x) eqn:Hx' => //.
 Admitted.
 
-Lemma flows_context_bigger Γ Γ' : flows_context Γ (Γ ⊔g Γ').
-Proof.
-  intros x. destruct (Γ !! x) eqn:Hx => //.
-Admitted.
-
-Lemma flows_context_refl Γ : flows_context Γ Γ.
-Proof. intros x. destruct (Γ !! x) => //. destruct c => //. Qed.
+(* Lemma flows_context_refl Γ : Γ ⊑g Γ. *)
+(* Proof. intros x. destruct (Γ !! x) => //. destruct c => //. Qed. *)
 
 Lemma join_context_comm Γ1 Γ2 : Γ1 ⊔g Γ2 = Γ2 ⊔g Γ1.
 Proof.
-Admitted.
-
+  unfold join_context.
+  rewrite merge_comm; try done.
+  intros.
+  destruct (Γ1 !! i) eqn:H1 => // ; rewrite H1;
+  destruct (Γ2 !! i) eqn:H2 => // ; rewrite H2; try done.
+  f_equal.
+  apply join_comm.
+Qed.
 
 Reserved Notation "'{{' Γ '⊢' e ':' ℓ '}}'" (at level 10, Γ at level 50, e at level 99).
 Inductive typecheck_expr : context -> expr -> confidentiality -> Prop :=

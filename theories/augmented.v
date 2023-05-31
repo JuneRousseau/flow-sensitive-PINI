@@ -62,7 +62,7 @@ Fixpoint command_of_jcommand j :=
   end.
 
 Lemma command_id : forall c, command_of_jcommand (jcommand_of_command c) = c.
-Proof. intros. induction c => //=; try by rewrite IHc1 IHc2. by rewrite IHc. Qed. 
+Proof. intros. induction c => //=; try by rewrite IHc1 IHc2. by rewrite IHc. Qed.
 
 Definition jconfig : Type :=
   (option jcommand) * (Stream value) * (Stream value) * memory * trace.
@@ -72,16 +72,14 @@ Fixpoint flows_pc pc1 pc2 :=
   | l1 :: pc1, l2 :: pc2 => flows l1 l2 /\ flows_pc pc1 pc2
   | [], [] => True
   | _, _ => False end.
+Notation "pc1 '⊑pc' pc2" := (flows_pc pc1 pc2) (at level 40).
 
-Lemma flows_pc_refl pc : flows_pc pc pc.
-Proof. induction pc => //=. split => //. destruct a => //. Qed.
+#[export] Instance reflexive_flows_pc : Reflexive flows_pc.
+Proof. intros pc. induction pc => //=. Defined.
 
-Lemma flows_pc_trans pc0 pc1 pc2:
-  flows_pc pc0 pc1 ->
-  flows_pc pc1 pc2 ->
-  flows_pc pc0 pc2.
+#[export] Instance transitive_flows_pc : Transitive flows_pc.
 Proof.
-  intros H1 H2.
+  intros pc0 pc1 pc2 H1 H2.
   generalize dependent pc2; generalize dependent pc1.
   induction pc0; intros => //=.
   - destruct pc2 => //. destruct pc1 => //.
@@ -91,7 +89,7 @@ Proof.
     destruct H2 as [? H2].
     split; first by destruct a, c0, c.
     eapply IHpc0 => //.
-Qed.
+Defined.
 
 Fixpoint join_pc pc1 pc2 :=
   match pc1, pc2 with
@@ -103,19 +101,20 @@ Fixpoint join_pc pc1 pc2 :=
   | [], [] => Some []
   | _, _ => None
   end.
+Notation "pc1 '⊔pc' pc2" := (join_pc pc1 pc2) (at level 40).
 
-Lemma join_pc_comm pc1 pc2: join_pc pc1 pc2 = join_pc pc2 pc1.
+Lemma join_pc_comm pc1 pc2: pc1 ⊔pc pc2 = pc2 ⊔pc pc1.
 Proof. generalize dependent pc2. induction pc1; intros; destruct pc2 => //=.
        rewrite IHpc1. destruct (join_pc pc2 pc1), a, c => //. Qed.
 
-Lemma join_pc_idem pc : join_pc pc pc = Some pc.
+Lemma join_pc_idem pc : pc ⊔pc pc = Some pc.
 Proof. induction pc => //=. rewrite IHpc. destruct a => //. Qed.
 
 Lemma flows_join_pc pc0 pc1 pc2 pcj :
-  flows_pc pc0 pc1 ->
-  flows_pc pc0 pc2 ->
-  join_pc pc1 pc2 = Some pcj ->
-  flows_pc pc0 pcj.
+  pc0 ⊑pc pc1 ->
+  pc0 ⊑pc pc2 ->
+  (pc1 ⊔pc pc2) = Some pcj ->
+  pc0 ⊑pc pcj.
 Proof.
   intros Hpc1 Hpc2 Hpcj.
   generalize dependent pc1; generalize dependent pc2; generalize dependent pcj.
@@ -131,9 +130,9 @@ Proof.
     eapply IHpc0. 3:exact Hpc. done. done.
 Qed.
 
-Lemma flows_pc_bigger pc pc' pcj:
-  join_pc pc pc' = Some pcj ->
-  flows_pc pc pcj.
+Lemma flows_pc_join pc pc' pcj:
+  pc ⊔pc pc' = Some pcj ->
+  pc ⊑pc pcj.
 Proof.
   intros Hpc.
   generalize dependent pc'; generalize dependent pcj.
@@ -189,20 +188,20 @@ Proof.
  Qed.
 
 Inductive jtypecheck : context -> list confidentiality -> jcommand -> context -> list confidentiality -> Prop :=
+
 | JTSkip : forall Γ pc Γf pcf,
     flows_context Γ Γf ->
-    flows_pc pc pcf ->
+    pc ⊑pc pcf ->
     jtypecheck Γ pc JSkip Γf pcf
 
-| JTAssign : forall le Γ pc x e Γ' pcf,
+| JTAssign : forall le Γ pc x e Γf pcf,
     {{ Γ ⊢ e : le }} ->
-    flows_context (<[ x := fold_left join pc le ]> Γ) Γ' ->
-    flows_pc pc pcf ->
-    jtypecheck Γ pc (JAssign x e) Γ' pcf
+    flows_context (<[ x := fold_left join pc le ]> Γ) Γf ->
+    pc ⊑pc pcf ->
+    jtypecheck Γ pc (JAssign x e) Γf pcf
 
 | JTSeq : forall (Γ1 Γ2 Γ3 : context) pc1 pc2 pc3 c1 c2,
     jtypecheck Γ1 pc1 c1 Γ2 pc2 ->
-(*    flows_context Γ2 Γ2' -> *)
   jtypecheck Γ2 pc2 c2 Γ3 pc3 ->
   jtypecheck Γ1 pc1 (JSeq c1 c2) Γ3 pc3
 
@@ -210,22 +209,15 @@ Inductive jtypecheck : context -> list confidentiality -> jcommand -> context ->
   {{ Γ ⊢ e : l }} ->
   jtypecheck Γ (l :: pc) c1 Γ1 pc1 ->
   jtypecheck Γ (l :: pc) c2 Γ2 pc2 ->
-  join_pc pc1 pc2 = Some pcf ->
-  jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pcf (* pc1 TO FIX must include pc2 *)
-(*| JTIf : forall l Γ Γ1 Γ2 pc e c1 c2 pc1 pc2,
-  {{ Γ ⊢ e : l }} ->
-  jtypecheck Γ (l :: pc) c1 Γ1 pc1 ->
-  jtypecheck Γ (l :: pc) c2 Γ2 pc2 ->
-  jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pc1 (* pc1 TO FIX must include pc2 *)
- *)
+  pc1 ⊔pc pc2 = Some pcf ->
+  jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pcf
 
 | JTWhile : forall l Γ pc e c Γ' pc',
     flows_context Γ Γ' ->
-    flows_pc pc pc' ->
+    pc ⊑pc pc' ->
     {{ Γ' ⊢ e : l }} ->
     jtypecheck Γ' (l :: pc') c Γ' (l :: pc') ->
     jtypecheck Γ pc (JWhile e c) Γ' pc'
-             
 
              (*
 (* Does not change the environment *)
@@ -246,20 +238,19 @@ Inductive jtypecheck : context -> list confidentiality -> jcommand -> context ->
 | JTInput : forall Γ pc x ch Γ' pcf,
   (fold_left join pc LPublic ⊑ confidentiality_of_channel ch) ->
   flows_context ( <[ x := (fold_left join pc (confidentiality_of_channel ch)) ]> Γ) Γ' ->
-  flows_pc pc pcf ->
+  pc ⊑pc pcf ->
   jtypecheck Γ pc (JInput ch x) Γ' pcf
 
 | JTOutput : forall le Γ pc e ch Γf pcf,
   {{ Γ ⊢ e : le }} ->
   (fold_left join pc le ⊑ confidentiality_of_channel ch) ->
   flows_context Γ Γf ->
-  flows_pc pc pcf ->
+  pc ⊑pc pcf ->
   jtypecheck Γ pc (JOutput ch e) Γf pcf
 
 | JTJoin : forall Γ pc j Γ' l pc',
     jtypecheck Γ pc j Γ' (l :: pc') ->
     jtypecheck Γ pc (JThenJoin j) Γ' pc'
-            
 .
 
 
@@ -450,106 +441,3 @@ Inductive bridges : jconfig -> context -> list confidentiality -> jconfig -> con
     bridges jc' Γ' ls' jc'' Γ'' ls'' ->
     bridges jc Γ ls jc'' Γ'' ls''
 .
-
-(* Inductive pevent : Type := *)
-(* | EmptyEvent *)
-(* | AssignEvent (x : var) (v : value) *)
-(* | InputEvent (v : value) *)
-(* | OutputEvent (v : value) *)
-(* . *)
-
-(* Inductive event_step : state -> context -> confidentiality -> pevent -> state -> context -> confidentiality -> Prop:= *)
-(* | PSkip : forall S P m t gamma pc, *)
-(*   exec_command (S, P, Some CSkip, m, t) (S, P, None, m, t) -> *)
-(*   event_step (S, P, Some CSkip, m, t) gamma pc EmptyEvent (S, P, None, m, t) gamma pc *)
-
-(* | PAssignPublic : forall S P x e v m t gamma pc gamma' l, *)
-(*   exec_command (S, P, Some (CAssign x e), m, t) (S, P, None, set_var x v m, t) -> *)
-(*   eval_expr e m v -> *)
-(*   find_var x gamma = Some l -> (* We REQUIRE that x has the right label *) *)
-(*   gamma' = set_var x (l ⊔ pc) gamma -> *)
-(*   event_step (S, P, Some (CAssign x e), m, t) gamma pc *)
-(*     (AssignEvent x v) (S, P, None, set_var x v m, t) gamma' pc *)
-
-(* (* TODO When doing the sequence, the level of the pc never change... *)
-(*    Only when we enter enter in a block, but seq stays at the same level *) *)
-(* | PSeq1 : forall S P c1 c2 m t S' P' c1' m' t' ev gamma pc gamma', *)
-(*   exec_command (S, P, Some (CSeq c1 c2), m, t) (S', P', Some (CSeq c1' c2), m', t') -> *)
-(*   event_step *)
-(*     (S, P, Some c1, m, t) gamma pc *)
-(*     ev *)
-(*     (S', P', Some c1', m', t') gamma' pc -> *)
-(*   event_step *)
-(*     (S, P, Some (CSeq c1 c2), m, t) gamma pc *)
-(*     ev *)
-(*     (S', P', Some (CSeq c1' c2), m', t') *)
-(*     gamma' pc *)
-
-(* | PSeq2 : forall S P c1 c2 m t S' P' m' t' ev gamma gamma' pc, *)
-(*   exec_command (S, P, Some (CSeq c1 c2), m, t) (S', P', Some c2, m', t') -> *)
-(*   event_step (S, P, Some c1, m, t) gamma pc ev (S', P', None, m', t') gamma' pc -> *)
-(*   event_step (S, P, Some (CSeq c1 c2), m, t) gamma pc ev (S', P', Some c2, m', t') gamma' pc *)
-
-(* | PIf : forall S P e (c1 : command) c2 m t v (c: command) l gamma pc, *)
-(*   exec_command *)
-(*     (S, P, Some (CIfThenElse e c1 c2), m, t) *)
-(*     (S, P, Some c, m, t) -> *)
-(*   eval_expr e m v -> *)
-(*   typecheck_expr gamma e l -> *)
-(*   c = (if Nat.eqb v 0 then c2 else c1) -> *)
-(*   event_step *)
-(*     (S, P, Some (CIfThenElse e c1 c2), m, t) gamma pc *)
-(*     EmptyEvent *)
-(*     (S, P, Some c, m, t) gamma (pc ⊔ l) *)
-
-(* | PWhile : forall S P e c m t, *)
-(*   exec_command *)
-(*     (S, P, Some (CWhile e c), m, t) *)
-(*     (S, P, Some (CIfThenElse e (CSeq c (CWhile e c)) CSkip), m, t) -> *)
-(*   event_step *)
-(*     (S, P, Some (CWhile e c), m, t) *)
-(*     EmptyEvent *)
-(*     (S, P, Some (CIfThenElse e (CSeq c (CWhile e c)) CSkip), m, t) *)
-
-(* | PInputPublic : forall S v P x m t, *)
-(*   exec_command *)
-(*     (S, Streams.Cons v P, Some (CInput Public x), m, t) *)
-(*     (S, P, None, set_var x v m, EvInput Public v :: t) -> *)
-(*   event_step *)
-(*     (S, Streams.Cons v P, Some (CInput Public x), m, t) *)
-(*     (InputEvent v) *)
-(*     (S, P, None, set_var x v m, EvInput Public v :: t) *)
-
-(* | PInputSecret : forall v S P x m t, *)
-(*   exec_command *)
-(*     (Streams.Cons v S, P, Some (CInput Secret x), m, t) *)
-(*     (S, P, None, set_var x v m, EvInput Secret v :: t) -> *)
-(*   event_step *)
-(*     (Streams.Cons v S, P, Some (CInput Secret x), m, t) *)
-(*     EmptyEvent *)
-(*     (S, P, None, set_var x v m, EvInput Secret v :: t) *)
-
-(* | POutputPublic : forall S P e m t v, *)
-(*   exec_command (S, P, Some (COutput Public e), m, t) (S, P, None, m, EvOutput Public v :: t) -> *)
-(*   eval_expr e m v -> *)
-(*   event_step (S, P, Some (COutput Public e), m, t) (OutputEvent v) *)
-(*     (S, P, None, m, EvOutput Public v :: t) *)
-
-(* | POutputSecret : forall S P e m t v, *)
-(*   exec_command (S, P, Some (COutput Secret e), m, t) (S, P, None, m, EvOutput Secret v :: t) -> *)
-(*   eval_expr e m v -> *)
-(*   event_step (S, P, Some (COutput Secret e), m, t) EmptyEvent (S, P, None, m, EvOutput Secret v :: t) *)
-(* . *)
-
-(* Lemma exec_command_iff_event_step : *)
-(*   forall st st', exec_command st st' <-> exists ev, event_step st ev st'. *)
-(* Proof. *)
-(*   intros; split;intros; cycle 1. *)
-(*   - destruct H; induction H; assumption. *)
-(*   - induction H; try (eexists; (econstructor; eauto); (econstructor; eauto)). *)
-(*     + destruct IHexec_command as [ev IHexec_command]. *)
-(*       exists ev ; (econstructor; auto) ; (econstructor; auto). *)
-(*     + destruct IHexec_command as [ev IHexec_command]. *)
-(*       exists ev ; (econstructor; auto) ; (econstructor; auto). *)
-(*     + destruct ch; (eexists; (econstructor; eauto); (econstructor; eauto)). *)
-(* Qed. *)
