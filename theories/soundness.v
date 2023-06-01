@@ -42,7 +42,7 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
      rewrite (IHe2 _ _ H9 Hagree H5 H7). done.
  Qed.
 
-
+(*
 Lemma trace_monotone :
    forall c S P m t c' S' P' m' t',
      (c, S, P, m, t) ---> (c', S', P', m', t') ->
@@ -80,7 +80,88 @@ Lemma trace_monotone :
    (* - subst x z. *)
    (*   inversion H; subst. *)
    (*   apply IHHred. *)
- Admitted.
+  Admitted. *)
+
+
+  Lemma trace_monotone_with_gamma :
+   forall c S P m t c' S' P' m' t' Γ pc ev Γ' pc',
+     exec_with_gamma (c, S, P, m, t) Γ pc ev (c', S', P', m', t') Γ' pc' ->
+     exists nw, t' = app nw t.
+  Proof.
+    destruct c as [c|].
+    - induction c; intros * Hstep; inversion Hstep; subst
+      ; try (eexists []; reflexivity).
+     + eapply IHc1; eassumption.
+      + eapply IHc1; eassumption.
+      + exists ( [EvInput Public v] ) ; reflexivity.
+      + exists ( [EvInput Secret v] ) ; reflexivity.
+      + exists ( [EvOutput c v] ) ; reflexivity.
+      + eapply IHc; eassumption.
+      + eapply IHc; eassumption.
+    - inversion 1.
+  Qed.
+
+
+  Lemma trace_monotone_bridge :
+   forall k c S P m t c' S' P' m' t' Γ pc ev Γ' pc',
+     bridge (c, S, P, m, t) Γ pc k ev (c', S', P', m', t') Γ' pc' ->
+     exists nw, t' = app nw t.
+  Proof.
+    destruct c as [c|]; last by inversion 1.
+    generalize dependent c.
+    induction k; intros * Hstep; inversion Hstep; subst;
+      try by eapply trace_monotone_with_gamma.
+    eapply trace_monotone_with_gamma in H15 as [nw ->].
+    eapply IHk in H16 as [nw' ->].
+    exists (nw' ++ nw)%list.
+    by rewrite app_assoc.
+  Qed.
+
+  
+  Lemma trace_monotone_incomplete_bridge :
+    forall k c S P m t c' S' P' m' t' Γ pc Γ' pc',
+      incomplete_bridge (c, S, P, m, t) Γ pc k (c', S', P', m', t') Γ' pc' ->
+      exists nw, t' = app nw t.
+  Proof.
+    induction k; intros * Hstep; inversion Hstep; subst.
+    - by eexists nil.
+    - apply trace_monotone_with_gamma in H14 as [nw ->].
+      eapply IHk in H15 as [nw' ->].
+      exists (nw' ++ nw)%list.
+      by rewrite app_assoc.
+  Qed.
+
+  Lemma trace_monotone_bridges :
+    forall k c S P m t c' S' P' m' t' Γ pc Γ' pc' ev,
+      bridges (c, S, P, m, t) Γ pc k ev (c', S', P', m', t') Γ' pc' ->
+      exists nw, t' = app nw t.
+  Proof.
+    induction k; intros * Hstep; inversion Hstep; subst.
+    - by eexists nil.
+    - lia.
+    - destruct jc' as [[[[??]?]?]?]. apply trace_monotone_bridge in H0 as [nw ->].
+      assert (k0 = k) as ->; first lia. eapply IHk in H4 as [nw' ->].
+      exists (nw' ++ nw)%list.
+      by rewrite app_assoc.
+  Qed.
+
+  
+  Lemma trace_monotone_full_bridges :
+    forall c S P m t c' S' P' m' t' Γ pc Γ' pc' ev,
+      full_bridges (c, S, P, m, t) Γ pc ev (c', S', P', m', t') Γ' pc' ->
+      exists nw, t' = app nw t.
+  Proof.
+    intros * Hstep; inversion Hstep; subst.
+    destruct jc' as [[[[??]?]?]?].
+    eapply trace_monotone_bridges in H as [nw ->].
+    eapply trace_monotone_incomplete_bridge in H0 as  [nw' ->].
+    exists (nw' ++ nw)%list.
+    by rewrite app_assoc.
+  Qed.
+
+
+  
+
 
   Lemma project_app :
     forall t1 t2,
@@ -486,6 +567,26 @@ Proof.
     + split => //. eapply IHj0 in H15 as [Hm1 _] => //.
 Qed.
 
+Lemma jtype_preservation_bridge j0 P0 S0 m0 t0 Γ0 pc0 j1 P1 S1 m1 t1 Γ1 pc1 ev Γf pcf k:
+  wf_memory m0 Γ0 ->
+  jtypecheck Γ0 pc0 j0 Γf pcf ->
+  bridge
+    ( Some j0 , P0, S0, m0, t0 ) Γ0 pc0
+    k ev
+    ( j1 , P1, S1, m1, t1 ) Γ1 pc1 ->
+  wf_memory m1 Γ1 /\ match j1 with Some j1 => jtypecheck Γ1 pc1 j1 Γf pcf | None => True end.
+Proof.
+  intros Hm0 Hj0 Hexec.
+  generalize dependent j0; generalize dependent P0; generalize dependent S0;
+    generalize dependent m0; generalize dependent t0; generalize dependent Γ0;
+    generalize dependent pc0.
+  induction k; intros; inversion Hexec; subst.
+  - by eapply jtype_preservation.
+  - eapply jtype_preservation in H15 as [??] => //.
+    eapply IHk in H16 => //.
+Qed. 
+
+
 
 (*
 (* executing implies executing with gammas *)
@@ -551,14 +652,16 @@ Admitted. *)
 
 
 
- (* Lemma bridge_adequacy : *)
- (*   forall n c pc Γ Γf m S P t cf Sf Pf mf tf, *)
- (*     typecheck Γ pc c Γf -> *)
- (*     wf_memory m Γ -> *)
- (*     (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) -> *)
- (*     exists j Γ' ls', bridges (Some (jcommand_of_command c), S, P, m, t) Γ [pc] *)
- (*               (j, Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j = cf. *)
- (* Proof. *)
+  Lemma bridge_adequacy : 
+    forall n c pc Γ Γf m S P t cf Sf Pf mf tf, 
+      typecheck Γ pc c Γf -> 
+      wf_memory m Γ -> 
+      (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) -> 
+      exists j Γ' ls' evs, full_bridges (Some (jcommand_of_command c), S, P, m, t) Γ [pc] evs
+                     (j, Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j = cf /\
+  trace_of_public_trace evs = (⟦ tf ⟧p). 
+  Proof.
+  Admitted. 
  (*   intro n. *)
  (*   induction n; *)
  (*     intros * Hc Hm Hred. *)
@@ -592,7 +695,7 @@ Admitted. *)
    (*     destruct j1 => //. inversion Hj; subst.  *)
    (*     assert (-{ Γ1, fold_left join pc1 LPublic ⊢ (command_of_jcommand j) ~> Γf }-). *)
  (* Admitted. *)
- 
+(* 
  Lemma bridge_adequacy :
    forall n c pc Γ Γf m S P t cf Sf Pf mf tf,
      typecheck Γ pc c Γf ->
@@ -636,7 +739,7 @@ Admitted. *)
    (*       exact Hredg. rewrite command_id in Hbr. exact Hbr.  *)
 
 
- Admitted.
+ Admitted. *)
 
  (* Lemma bridge_noninterference : *)
  (*   forall Γ m1 m2 c Γf ev1 ev2 n1 n2 c1 S1 S1' P P1 m1' t1 t1' c2 S2 S2' P2 m2' t2 t2' Γ1' Γ2', *)
@@ -664,8 +767,77 @@ Admitted. *)
  (* Proof. *)
  (* Admitted. *)
 
+  
+   Lemma bridge_agree j S1 P m1 t1 Γ pc k ev j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k' ev' j2 S2f P2f m2f t2f Γ2 pc2:
+     agree_on_public Γ m1 m2 ->
+     (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
+     bridge (Some j , S1 , P , m1 , t1) Γ pc
+       k ev
+       (j1, S1f, P1f, m1f, t1f ) Γ1 pc1 ->
+     bridge (Some j, S2, P, m2, t2 ) Γ pc
+       k' ev'
+       (j2, S2f, P2f, m2f, t2f ) Γ2 pc2 ->
+     k = k' /\ ev = ev' /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
+   Proof.
+   Admitted.
+
+   Lemma incomplete_bridge_keeps_trace j S P m t Γ pc k j' S' P' m' t' Γ' pc':
+     incomplete_bridge (Some j, S, P, m, t) Γ pc k (j', S', P', m', t') Γ' pc' ->
+     P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p) = (⟦ t' ⟧p).
+   Proof.
+   Admitted. 
 
 
+   Lemma bridges_none S P m t Γ pc k evs jc Γ' pc' :
+     bridges (None, S, P, m, t) Γ pc k evs jc Γ' pc' ->
+     k = 0 /\ evs = [] /\ jc = (None, S, P, m, t) /\ Γ = Γ' /\ pc = pc'.
+   Proof.
+     intros Hbr. inversion Hbr; subst. done. inversion H.
+   Qed. 
+
+   Lemma bridges_agree j S1 P m1 t1 Γ pc k1 j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k2 j2 S2f P2f m2f t2f Γ2 pc2 Γf pcf evs1 evs2:
+     jtypecheck Γ pc j Γf pcf ->
+     wf_memory m1 Γ ->
+     agree_on_public Γ m1 m2 ->
+     (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
+     length evs1 = length evs2 ->
+     bridges (Some j, S1, P, m1, t1) Γ pc 
+       k1 evs1 (j1, S1f, P1f, m1f, t1f) Γ1 pc1 ->
+     bridges (Some j, S2, P, m2, t2) Γ pc 
+       k2 evs2 (j2, S2f, P2f, m2f, t2f) Γ2 pc2 ->
+     k1 = k2 /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ evs1 = evs2.
+   Proof.
+     intros Htype Hwf Hm Ht Hlen Hred1 Hred2.
+     generalize dependent j; generalize dependent S1 ; generalize dependent m1;
+       generalize dependent t1; generalize dependent evs1;
+       generalize dependent S2; generalize dependent m2;
+       generalize dependent t2; generalize dependent evs2;
+       generalize dependent P; generalize dependent k2;
+       generalize dependent Γ; generalize dependent pc.
+     induction k1; intros; inversion Hred1; subst. 2: lia.
+     - inversion Hred2; subst; first done. simpl in Hlen. lia.
+     - assert (k = k1) as ->; first lia.
+       inversion Hred2; subst; first by simpl in Hlen; lia.
+       destruct jc'0 as [[[[ j0 S0 ] P0 ] m0 ] t0].
+       destruct jc' as [[[[ j' S' ] P' ] m' ] t'].
+       eapply bridge_agree in H1.
+       4: exact H0. 3: done. 2: done.
+       destruct H1 as (-> & -> & -> & -> & -> & -> & Hm' & Ht').
+       destruct j0.
+       2:{ apply bridges_none in H2 as (-> & -> & Hjc & -> & ->).
+           inversion Hjc; subst.
+           apply bridges_none in H4 as (-> & -> & Hjc' & -> & ->).
+           inversion Hjc'; subst. repeat split => //. }
+       
+       eapply IHk1 in H2.
+       7: exact H4.
+       destruct H2 as (-> & -> & -> & -> & -> & Hmf & ->).
+       repeat split => //.
+       simpl in Hlen; lia. done. 
+       eapply jtype_preservation_bridge in H0 as [??] => //.
+       done.
+       eapply jtype_preservation_bridge in H0 as [??] => //.
+   Qed. 
 
  Lemma typecheck_is_sound :
    forall c S1 S2 P m1 m2 t1 t2 c1 c2 S1' S2' P1 P2 m1' m2' t1' t2' Γ Γf,
@@ -681,6 +853,32 @@ Admitted. *)
  Proof.
    intros c S1 S2 P m1 m2 t1 t2 c1 c2 S1f S2f P1f P2f m1f m2f t1f t2f Γ Γf
      Hc Hm Hm1 Hm2 Ht Hred1 Hred2 Hlen.
+   apply rtc_nsteps in Hred1 as [n1 Hred1].
+   eapply bridge_adequacy in Hred1 as (j1 & Γf1 & pcf1 & k1 & Hred1 & Hj1) => //.
+   apply rtc_nsteps in Hred2 as [n2 Hred2].
+   eapply bridge_adequacy in Hred2 as (j2 & Γf2 & pcf2 & k2 & Hred2 & Hj2) => //.
+   eapply bridges_agree in Hred2. 5: exact Hred1.
+   by repeat destruct Hred2 as [_ Hred2].
+   eapply jtype_adequacy. done. done. done. done.
+ Qed. 
+
+
+
+
+   
+   generalize dependent c. generalize dependent S1. generalize dependent P.
+
+
+
+
+ 
+     
+            
+   
+
+
+
+   
    assert (Hred1' := Hred1).
     apply rtc_bsteps in Hred1 as [n1 Hred1].
     generalize dependent c; generalize dependent S1; generalize dependent S2;
