@@ -43,19 +43,57 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
  Qed.
 
 
- Lemma trace_grows :
+Lemma trace_monotone :
    forall c S P m t c' S' P' m' t',
-     (c, S, P, m, t) --->* (c', S', P', m', t') ->
+     (c, S, P, m, t) ---> (c', S', P', m', t') ->
      exists nw, t' = app nw t.
- Proof.
+  Proof.
+    destruct c as [c|].
+    - induction c; intros * Hstep; inversion Hstep; subst
+      ; try (eexists []; reflexivity).
+     + eapply IHc1; eassumption.
+      + eapply IHc1; eassumption.
+      + exists ( [EvInput Public v] ) ; reflexivity.
+      + exists ( [EvInput Secret v] ) ; reflexivity.
+      + exists ( [EvOutput c v] ) ; reflexivity.
+    - inversion 1.
+  Qed.
+
+  Lemma trace_grows :
+    forall c S P m t c' S' P' m' t',
+      (c, S, P, m, t) --->* (c', S', P', m', t') ->
+      exists nw, t' = app nw t.
+  Proof.
+   intros * Hred.
+   remember (c, S, P, m, t) as cfg in Hred.
+   remember (c', S', P', m', t') as cfg' in Hred.
+   induction Hred.
+   (* No step -> no new event *)
+   - rewrite Heqcfg' in Heqcfg.
+     injection Heqcfg; intros ; subst.
+     by exists [].
+   (* -  *)
+   (*   destruct y as [[[[ c''  S'' ]  P''  ] m'' ] t'' ]. *)
+   (*   (* subst x. *) *)
+   (*   apply trace_monotone in H. *)
+   (* Multiple steps ->  *)
+   (* - subst x z. *)
+   (*   inversion H; subst. *)
+   (*   apply IHHred. *)
  Admitted.
 
- Lemma project_app :
-   forall t1 t2,
-     ⟦ (t1 ++ t2)%list ⟧p = ((⟦ t1 ⟧p) ++ (⟦ t2 ⟧p))%list.
- Proof.
- Admitted.
-
+  Lemma project_app :
+    forall t1 t2,
+      ⟦ (t1 ++ t2)%list ⟧p = ((⟦ t1 ⟧p) ++ (⟦ t2 ⟧p))%list.
+  Proof.
+   intros t1; induction t1; intros.
+   - reflexivity.
+   - destruct a; cbn
+     ; try apply IHt1
+     ; destruct c; cbn
+     ; try apply IHt1.
+     all: rewrite IHt1 ; reflexivity.
+ Qed.
 
  Lemma has_security_level :
    forall e m v Γ,
@@ -71,7 +109,7 @@ Proof.
   - specialize (IHHv1 Hm) as [l1 He1].
     specialize (IHHv2 Hm) as [l2 He2].
     exists (join l1 l2). by econstructor.
-Qed. 
+Qed.
 
 
 (* executing implies executing with gammas *)
@@ -124,7 +162,7 @@ Proof.
   - econstructor. eapply IHc0_1. done. rewrite fold_join. done.
   - econstructor. eapply IHc0_2. done. by rewrite fold_join.
   - by apply join_pc_idem.
-  - eapply IHc0 => //. by rewrite fold_join.
+  (* - eapply IHc0 => //. by rewrite fold_join. *)
   - rewrite - (fold_start pc (confidentiality_of_channel _)). by rewrite join_comm.
   - rewrite - (fold_start pc le). done.
 Qed.
@@ -244,25 +282,32 @@ Proof.
       ; [ by eapply flows_pc_join | done ].
       etransitivity; rewrite join_context_comm in Hcontextf
       ; [by eapply flows_context_join | done ].
-  - (* While *)
-    destruct (expr_type_flows_reverse _ _ _ _ Hcontextf H5) as (l0 & Hl0 & He).
-    econstructor => // ; try (repeat etransitivity => //).
-    + eapply IHc ; last done ; try done.
-      admit.
-      admit.
+  (* - (* While *) *)
+  (*   destruct (expr_type_flows_reverse _ _ _ _ Hcontextf H5) as (l0 & Hl0 & He). *)
+  (*   econstructor => // ; try (repeat etransitivity => //). *)
+  (*   + eapply IHc ; last done ; try done. *)
+  (*     admit. *)
+  (*     admit. *)
   - (* Input *)
     econstructor => //.
-    + admit. (* fold_left pc0 public ⊑ fold_left join pc1 LPublic ⊑ confid of channel c *)
-    + admit. (* just transitivity *)
+    + clear - H1 Hpc.
+      apply flows_pc_fold in Hpc.
+      by etransitivity.
+    + clear - H4 Hcontext Hcontextf Hpc.
+      do 2 (etransitivity; last done).
+      apply flows_add ; first done.
+      apply flows_fold; done.
     + repeat etransitivity => //.
   - (* Output *)
     destruct (expr_type_flows _ _ _ _ Hcontext H1) as (l0 & Hl0 & He).
     econstructor => //; try (repeat etransitivity => //).
-    + admit. (* fold_left pc0 public ⊑ fold_left join pc1 LPublic ⊑ confid of channel c *)
+    + clear -H2 Hl0 Hpc.
+      do 2 (etransitivity; last done).
+      apply flows_fold; done.
   - (* Join *)
     econstructor => //.
     eapply IHc ; last done ; try done.
-Admitted.
+Qed.
 
 Lemma jtype_adequacy_reverse Γ0 pc0 c0 Γf pcf:
   jtypecheck Γ0 pc0 (jcommand_of_command c0) Γf pcf ->
@@ -282,14 +327,14 @@ Proof.
     econstructor => //.
     + apply IHc0_1 in H3; by rewrite fold_join in H3.
     + apply IHc0_2 in H4; by rewrite fold_join in H4.
-  - econstructor => //.
-    apply IHc0 in H8.
-    admit. (* rewrite join, fold_left etc *)
+  (* - econstructor => //. *)
+  (*   apply IHc0 in H8. *)
+  (*   admit. (* rewrite join, fold_left etc *) *)
   - econstructor => //.
     rewrite - fold_start join_comm in H4; done.
   - econstructor => //.
     rewrite fold_start; done.
-Admitted.
+Qed.
 
 Lemma expr_type_unique Γ e l1 l2:
   {{ Γ ⊢ e : l1 }} -> {{ Γ ⊢ e : l2 }} -> l1 = l2.
@@ -322,16 +367,12 @@ Proof.
     by inversion Hpc.
 Qed.
 
-
 Lemma wf_update m Γ x v vt :
   wf_memory m Γ ->
   wf_memory (<[ x := v ]> m) (<[ x := vt ]> Γ).
 Proof.
   intros Hmem.
-  generalize dependent x.
-  generalize dependent v.
-  generalize dependent vt.
-  induction m using map_ind
+  destruct m using map_ind
   ; destruct Γ using map_ind
   ; intros ; intro y.
   (* m = ∅ *)
@@ -340,11 +381,66 @@ Proof.
       by repeat (rewrite lookup_insert).
     + apply String.eqb_neq in Heq ; subst.
       by repeat (rewrite lookup_insert_ne).
-  - (* Contradction in Hmem *) admit.
+  - exfalso ; clear -Hmem.
+    unfold wf_memory in Hmem.
+    specialize (Hmem i). by rewrite lookup_empty lookup_insert in Hmem.
   (* m = <[ x:= v ]> m' *)
-  - (* Contradction in Hmem *) admit.
-  - admit.
-Admitted.
+  - exfalso ; clear -Hmem.
+    unfold wf_memory in Hmem.
+    specialize (Hmem i). by rewrite lookup_empty lookup_insert in Hmem.
+  - clear IHm IHΓ.
+    destruct (x =? y) eqn:Heq.
+    + apply String.eqb_eq in Heq ; subst.
+      by repeat (rewrite lookup_insert).
+    + apply String.eqb_neq in Heq ; subst.
+      rewrite lookup_insert_ne; first done.
+      destruct (i =? y) eqn:Heqi.
+      * apply String.eqb_eq in Heqi ; subst.
+        repeat (rewrite lookup_insert).
+        rewrite lookup_insert_ne; first done.
+        destruct (i0 =? y) eqn:Heqi0.
+        apply String.eqb_eq in Heqi0 ; subst.
+        by repeat (rewrite lookup_insert).
+        apply String.eqb_neq in Heqi0 ; subst.
+        rewrite lookup_insert_ne; first done.
+        destruct (m0 !! y) eqn:Hm0; first done.
+        specialize (Hmem y).
+        rewrite lookup_insert in Hmem.
+        clear -Hmem Heqi0 Hm0.
+        rewrite lookup_insert_ne in Hmem; first done.
+        by rewrite Hm0 in Hmem.
+      * apply String.eqb_neq in Heqi ; subst.
+        rewrite lookup_insert_ne; first done.
+        destruct (m !! y) eqn:Hy;
+        rewrite lookup_insert_ne; try done.
+        ** destruct (i0 =? y) eqn:Heqi0.
+        *** apply String.eqb_eq in Heqi0 ; subst.
+           by repeat (rewrite lookup_insert).
+        *** apply String.eqb_neq in Heqi0 ; subst.
+           rewrite lookup_insert_ne; first done.
+           destruct (m0 !! y) eqn:Hy0; first done.
+           specialize (Hmem y).
+           rewrite lookup_insert_ne in Hmem; try done.
+           rewrite Hy in Hmem.
+           rewrite lookup_insert_ne in Hmem; try done.
+           by rewrite Hy0 in Hmem.
+        ** destruct (i0 =? y) eqn:Heqi0.
+        *** apply String.eqb_eq in Heqi0 ; subst.
+            rewrite lookup_insert.
+            specialize (Hmem y).
+            rewrite lookup_insert_ne in Hmem => //.
+            rewrite Hy in Hmem.
+            rewrite lookup_insert in Hmem => //.
+        *** apply String.eqb_neq in Heqi0 ; subst.
+           rewrite lookup_insert_ne; first done.
+           destruct (m0 !! y) eqn:Hy0; last done.
+           (* Contradiction with Hmem *)
+           specialize (Hmem y).
+           rewrite lookup_insert_ne in Hmem; try done.
+           rewrite Hy in Hmem.
+           rewrite lookup_insert_ne in Hmem; try done.
+           by rewrite Hy0 in Hmem.
+Qed.
 
 Lemma jtype_preservation j0 P0 S0 m0 t0 Γ0 pc0 j1 P1 S1 m1 t1 Γ1 pc1 ev Γf pcf :
   wf_memory m0 Γ0 ->
@@ -381,14 +477,14 @@ Proof.
       apply flows_context_join.
       by eapply flows_pc_join.
   - (* While *) inversion Hexec; subst => //. split => //. inversion Hj0; subst => //.
-    admit. (* TODO is this even true ? *)
+    (* admit. (* TODO is this even true ? *) *)
   - inversion Hexec; subst => //; split => //; by apply wf_update.
   - inversion Hexec; subst => //.
   - inversion Hj0; subst => //. inversion Hexec; subst => //.
     + eapply IHj0 in H15 as [Hm1 Hj'] => //. split => //.
       econstructor; done.
     + split => //. eapply IHj0 in H15 as [Hm1 _] => //.
-Admitted.
+Qed.
 
 
 (*
@@ -455,13 +551,13 @@ Admitted. *)
 
 
 
- Lemma bridge_adequacy :
-   forall n c pc Γ Γf m S P t cf Sf Pf mf tf,
-     typecheck Γ pc c Γf ->
-     wf_memory m Γ ->
-     (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
-     exists j Γ' ls', bridges (Some (jcommand_of_command c), S, P, m, t) Γ [pc]
-               (j, Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j = cf.
+ (* Lemma bridge_adequacy : *)
+ (*   forall n c pc Γ Γf m S P t cf Sf Pf mf tf, *)
+ (*     typecheck Γ pc c Γf -> *)
+ (*     wf_memory m Γ -> *)
+ (*     (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) -> *)
+ (*     exists j Γ' ls', bridges (Some (jcommand_of_command c), S, P, m, t) Γ [pc] *)
+ (*               (j, Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j = cf. *)
  (* Proof. *)
  (*   intro n. *)
  (*   induction n; *)
@@ -497,18 +593,18 @@ Admitted. *)
    (*     assert (-{ Γ1, fold_left join pc1 LPublic ⊢ (command_of_jcommand j) ~> Γf }-). *)
  (* Admitted. *)
  
- (* Lemma bridge_adequacy : *)
- (*   forall n c pc Γ Γf m S P t cf Sf Pf mf tf, *)
- (*     typecheck Γ pc c Γf -> *)
- (*     wf_memory m Γ -> *)
- (*     (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) -> *)
- (*     (exists j S' P' m' t' Γ' ls' ev k n', *)
- (*       bridge (Some (jcommand_of_command c), S, P, m, t) Γ [] k ev (j, S', P', m', t') Γ' ls' /\ *)
- (*         (option_map command_of_jcommand j, S', P', m', t') --->[n'] (cf, Sf, Pf, mf, tf) /\ *)
- (*         k + n' + 1 = n) \/ *)
- (*       (exists j Γ' ls, *)
- (*           incomplete_bridge (Some (jcommand_of_command c), S, P, m, t) Γ [] n *)
- (*             ( j, Sf, Pf, mf, tf ) Γ' ls /\ option_map command_of_jcommand j = cf). *)
+ Lemma bridge_adequacy :
+   forall n c pc Γ Γf m S P t cf Sf Pf mf tf,
+     typecheck Γ pc c Γf ->
+     wf_memory m Γ ->
+     (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
+     (exists j S' P' m' t' Γ' ls' ev k n',
+       bridge (Some (jcommand_of_command c), S, P, m, t) Γ [] k ev (j, S', P', m', t') Γ' ls' /\
+         (option_map command_of_jcommand j, S', P', m', t') --->[n'] (cf, Sf, Pf, mf, tf) /\
+         k + n' + 1 = n) \/
+       (exists j Γ' ls,
+           incomplete_bridge (Some (jcommand_of_command c), S, P, m, t) Γ [] n
+             ( j, Sf, Pf, mf, tf ) Γ' ls /\ option_map command_of_jcommand j = cf).
  (* Proof. *)
    (* intro n. *)
    (* induction n; *)
@@ -587,9 +683,9 @@ Admitted. *)
      Hc Hm Hm1 Hm2 Ht Hred1 Hred2 Hlen.
    assert (Hred1' := Hred1).
     apply rtc_bsteps in Hred1 as [n1 Hred1].
-    generalize dependent c. generalize dependent S1. generalize dependent S2.
-    generalize dependent P. generalize dependent m1. generalize dependent m2.
-    generalize dependent t1. generalize dependent t2. generalize dependent Γ.
+    generalize dependent c; generalize dependent S1; generalize dependent S2;
+    generalize dependent P; generalize dependent m1; generalize dependent m2;
+    generalize dependent t1; generalize dependent t2; generalize dependent Γ.
     induction n1; intros.
     { inversion Hred1; subst. apply trace_grows in Hred2 as [? ->].
       rewrite project_app. rewrite project_app Ht in Hlen. rewrite app_length in Hlen.

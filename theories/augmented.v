@@ -212,12 +212,12 @@ Inductive jtypecheck : context -> list confidentiality -> jcommand -> context ->
   pc1 ⊔pc pc2 = Some pcf ->
   jtypecheck Γ pc (JIfThenElse e c1 c2) (Γ1 ⊔g Γ2) pcf
 
-| JTWhile : forall l Γ pc e c Γ' pc',
-    flows_context Γ Γ' ->
-    pc ⊑pc pc' ->
-    {{ Γ' ⊢ e : l }} ->
-    jtypecheck Γ' (l :: pc') c Γ' (l :: pc') ->
-    jtypecheck Γ pc (JWhile e c) Γ' pc'
+(* | JTWhile : forall l Γ pc e c Γ' pc', *)
+(*     flows_context Γ Γ' -> *)
+(*     pc ⊑pc pc' -> *)
+(*     {{ Γ' ⊢ e : l }} -> *)
+(*     jtypecheck Γ' (l :: pc') c Γ' (l :: pc') -> *)
+(*     jtypecheck Γ pc (JWhile e c) Γ' pc' *)
 
              (*
 (* Does not change the environment *)
