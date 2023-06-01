@@ -823,7 +823,28 @@ Admitted. *)
      intros Hbr. inversion Hbr; subst. inversion H0. inversion H.
    Qed.
 
+   Lemma exec_grow_trace j S P m t Γ pc ev j' S' P' m' t' Γ' pc':
+     exec_with_gamma (j, S, P, m, t) Γ pc ev (j', S', P', m', t') Γ' pc' ->
+     (⟦ t' ⟧p) = match ev with
+                 | Some (Input v) => EvInput Public v :: (⟦ t ⟧p)
+                 | Some (Output v) => EvOutput Public v :: (⟦ t ⟧p)
+                 | _ => (⟦ t ⟧p) end.
+   Proof.
+     intros Hexec.
+     destruct j; last by inversion Hexec.
+     generalize dependent S; generalize dependent P;
+       generalize dependent m; generalize dependent t; generalize dependent Γ;
+       generalize dependent pc; generalize dependent j'; generalize dependent pc'.
+     induction j; intros; inversion Hexec; subst => //.
+     - destruct l => //.
+     - by eapply IHj1.
+     - by eapply IHj1.
+     - destruct c => //.
+     - by eapply IHj.
+     - by eapply IHj.
+   Qed. 
 
+   
    Lemma bridge_grow_trace j S P m t Γ pc k ev j' S' P' m' t' Γ' pc':
      bridge (j, S, P, m, t) Γ pc k ev (j', S', P', m', t') Γ' pc' ->
      (⟦ t' ⟧p) = match ev with
@@ -831,13 +852,32 @@ Admitted. *)
                  | Output v => EvOutput Public v :: (⟦ t ⟧p)
                  | _ => (⟦ t ⟧p) end.
    Proof.
-   Admitted.
+     intros Hbr.
+     destruct j; last by inversion Hbr.
+     generalize dependent j; generalize dependent S; generalize dependent P;
+       generalize dependent m; generalize dependent t; generalize dependent Γ;
+       generalize dependent pc.
+     induction k; intros; inversion Hbr; subst.
+     - eapply exec_grow_trace in H14. done.
+     - eapply IHk in H16. apply exec_with_gamma_no_event in H15 as ->. done. done.
+   Qed.        
+
 
    Lemma bridges_grow_trace j S P m t Γ pc k evs j' S' P' m' t' Γ' pc':
      bridges (j, S, P, m, t) Γ pc k evs (j', S', P', m', t') Γ' pc' ->
      length (⟦ t' ⟧p) > length (⟦ t ⟧p).
    Proof.
-   Admitted. 
+     intros Hbr.
+     destruct j; last by apply bridges_none in Hbr.
+     generalize dependent j; generalize dependent S; generalize dependent P;
+       generalize dependent m; generalize dependent t; generalize dependent Γ;
+       generalize dependent pc; generalize dependent evs.
+     induction k; intros; inversion Hbr; subst.
+     - apply bridge_grow_trace in H0. destruct ev ; rewrite H0 => //=; lia.
+     - destruct jc' as [[[[??]?]?]?]. destruct o; last by apply bridges_none in H4.
+       apply IHk in H4. apply bridge_grow_trace in H0.
+       rewrite H0 in H4. destruct ev; simpl in H4; lia.
+   Qed. 
 
    Lemma bridges_agree j S1 P m1 t1 Γ pc k1 j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k2 j2 S2f P2f m2f t2f Γ2 pc2 Γf pcf evs1 evs2:
      jtypecheck Γ pc j Γf pcf ->
