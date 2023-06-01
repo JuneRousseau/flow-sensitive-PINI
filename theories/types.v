@@ -177,11 +177,11 @@ Inductive typecheck : context -> confidentiality -> command -> context -> Prop :
   -{ Γ, pc ⊔ l ⊢ c2 ~> Γ2 }- ->
   -{ Γ, pc ⊢ (CIfThenElse e c1 c2) ~> (Γ1 ⊔g Γ2) }-
 
-| TWhile : forall l Γ pc e c Γ',
-    flows_context Γ Γ' ->
-    {{ Γ' ⊢ e : l }} ->
-    -{ Γ', pc ⊔ l ⊢ c ~> Γ' }- ->
-    -{ Γ, pc ⊢ (CWhile e c) ~> Γ' }-
+(* | TWhile : forall l Γ pc e c Γ', *)
+(*     flows_context Γ Γ' -> *)
+(*     {{ Γ' ⊢ e : l }} -> *)
+(*     -{ Γ', pc ⊔ l ⊢ c ~> Γ' }- -> *)
+(*     -{ Γ, pc ⊢ (CWhile e c) ~> Γ' }- *)
 
     (*
 (* Does not change the environment *)
