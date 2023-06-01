@@ -1,0 +1,20 @@
+\begin{figure}[ht]
+  \centering
+   \begin{mathparpagebreakable}
+    \inferH{Lit}{ }
+    {\etyping{\ctx}{\mathrm{Lit}~n}{\public}}
+    \and
+
+    \inferH{Var}
+    {\ctx(x) = \ell}
+    {\etyping{\ctx}{\mathrm{Var}~x}{\ell}}
+    \and
+
+    \inferH{BinOp}
+    {\etyping{\ctx}{e_{1}}{\ell_{1}} \and
+      \etyping{\ctx}{e_{2}}{\ell_{2}}}
+    {\etyping{\ctx}{e_{1} \oplus e_{2}}{\join{\ell_{1}}{\ell_{2}}}}
+
+   \end{mathparpagebreakable}
+  \caption{\label{fig:typing_expr} Typing rules for expressions }
+\end{figure}

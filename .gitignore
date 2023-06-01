@@ -15,3 +15,7 @@
 *.log
 *.out
 /report/project_report.pdf
+/report/figures/.auctex-auto/
+/.lia.cache
+/theories/.lia.cache
+/.dir-locals.el

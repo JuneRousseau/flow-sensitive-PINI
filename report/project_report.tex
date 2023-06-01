@@ -15,8 +15,26 @@
 \input{prelude}
 \input{instructions}
 
+\usepackage{mathpartir}
+\usepackage{pftools}
+\usepackage{}
+
+\newcommand{\pc}{\mathrm{pc}}
+\newcommand{\ctx}{\Gamma}
+\newcommand{\public}{\mathrm{LPublic}}
+\newcommand{\secret}{\mathrm{LSecret}}
+\newcommand{\typing}[4]{ #1, #2 \vdash #3 \rightsquigarrow #4}
+
+\newcommand{\join}[2]{#1 \sqcup #2}
+\newcommand{\joinc}[3][\pc]{#2 \sqcup #3}
+\newcommand{\flowsto}[2]{#1 \sqsubseteq #2}
+\newcommand{\etyping}[3]{ #1 \vdash #2 : #3}
+\newcommand{\pini}[1]{\mathrm{PINI}(#1)}
+
+\newtheorem{theorem}{Theorem}
+
 \title{
-   Flow-Sensitive Type System for PINI --- Project Report
+   Flow-Sensitive Type System for PINI
 }
 
 \groupNumber{1}
@@ -118,7 +136,17 @@ The type system is flow sensitive.
 
 \instruction{ What can we say that is interesting about the type system ? }.
 
-\instruction{ Figure type system }.
+For expressions, just like before, \( \etyping{\ctx}{e}{\ell} \) means that expression \( e \) has
+confidentiality level \( \ell \) in context \( \ctx \):
+
+\input{figures/typing_expr.tex}
+
+For commands, \( \typing{\ctx}{\pc}{c}{\ctx'} \) means that in context \( \ctx \) and execution
+level \( \pc \), command \( c \) is safe to execute and after execution, the context is now
+\( \ctx' \).
+
+\input{figures/typing_cmd.tex}
+\instruction{find better name than While1 and While2}
 
 \section{Soundness}%
 \label{sec:soundness}
@@ -170,7 +198,7 @@ last pc from the vector. If the vector is empty, then the pc is public.
 We define a transformation that establishes an equivalence between the original language and the
 auxiliary language.
 The transformation from the auxiliary language to the original language consists on erasing the join
-instructions.
+command.
 
 The adequacy of the auxiliary language establishes that it is equivalent to the original language.
 % From the original language, an if-then-else instruction becomes a sequence of if-then-else ; join.
@@ -180,6 +208,13 @@ The adequacy of the auxiliary language establishes that it is equivalent to the 
 
 \subsection{Main theorem}%
 \label{subsec:main_theorem}
+
+\begin{theorem}[Soundness type-system]
+  \( \forall c, \ctx.\
+  \typing{\emptyset}{\mathrm{Public}}{c}{\ctx}
+  \Rightarrow \pini{c}
+  \)
+\end{theorem}
 
 Composition of the lemma that leads to the soundness theorem.
 
@@ -195,6 +230,5 @@ What next ?
 %%
 \bibliographystyle{abbrvnat}
 \bibliography{literature}
-
 
 \end{document}
