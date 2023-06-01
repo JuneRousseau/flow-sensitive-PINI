@@ -418,10 +418,11 @@ Inductive incomplete_bridge : jconfig -> context -> list confidentiality -> nat 
       jc Γ ls
       0
       jc Γ ls
-| IBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n c'' S'' P'' m'' t'' Γ'' ls'',
+| IBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n c'' S'' P'' m'' t'' Γ'' ls'' ev,
+    match ev with | None | Some (Write _ _) => True | _ => False end ->
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
-      None
+      ev
       ( Some c', S', P', m', t' ) Γ' ls' ->
     incomplete_bridge
       ( Some c', S', P', m', t' ) Γ' ls'
@@ -436,19 +437,24 @@ Inductive incomplete_bridge : jconfig -> context -> list confidentiality -> nat 
 Inductive bridges : jconfig -> context -> list confidentiality -> nat -> list public_event -> jconfig -> context -> list confidentiality -> Prop :=
 (* | LastBridge : forall jc Γ ls jc' Γ' ls' n,
     incomplete_bridge jc Γ ls n jc' Γ' ls' -> bridges jc Γ ls 0 jc' Γ' ls' *)
-| NoBridge : forall jc Γ ls,
-    bridges jc Γ ls 0 [] jc Γ ls
+(* | NoBridge : forall jc Γ ls,
+    bridges jc Γ ls 0 [] jc Γ ls *)
+| LastBridge : forall jc Γ ls ev jc' Γ' ls' n,
+    match ev with | Input _ | Output _ => True | _ => False end ->
+    bridge jc Γ ls n ev jc' Γ' ls' ->
+    bridges jc Γ ls 0 [ev] jc' Γ' ls'
 | MoreBridge : forall jc Γ ls jc' Γ' ls' k jc'' Γ'' ls'' n ev evs,
     bridge jc Γ ls n ev jc' Γ' ls' ->
     bridges jc' Γ' ls' k evs jc'' Γ'' ls'' ->
-    bridges jc Γ ls (k + 1) (ev :: evs) jc'' Γ'' ls''
+    bridges jc Γ ls (Datatypes.S k) (ev :: evs) jc'' Γ'' ls''
 .
 
 Inductive full_bridges : jconfig -> context -> list confidentiality -> list public_event -> jconfig -> context -> list confidentiality -> Prop :=
-| FB: forall jc Γ ls k jc' Γ' ls' k' jc'' Γ'' ls'' evs,
+| BridgesAndIncomplete: forall jc Γ ls k jc' Γ' ls' k' jc'' Γ'' ls'' evs,
     bridges jc Γ ls k evs jc' Γ' ls' ->
     incomplete_bridge jc' Γ' ls' k' jc'' Γ'' ls'' ->
-    full_bridges jc Γ ls evs jc'' Γ'' ls''.
+    full_bridges jc Γ ls evs jc'' Γ'' ls''
+| NoBridges : forall jc Γ ls, full_bridges jc Γ ls [] jc Γ ls.
 
 Fixpoint trace_of_public_trace evs :=
   match evs with
@@ -457,4 +463,4 @@ Fixpoint trace_of_public_trace evs :=
   | Output v :: evs => EvOutput Public v :: trace_of_public_trace evs
   | Write _ _ :: evs => trace_of_public_trace evs
   end. 
-              | Write 
+
