@@ -350,8 +350,10 @@ Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option
       None 
       ( None, S, P, <[x := v ]> m, EvInput Secret v :: t ) Γ' ls
 
-| GOutput : forall S P m t ch e v Γ ls ev,
+| GOutput : forall S P m t ch e v Γ ls ev l,
     e ; m ⇓ v ->
+        {{ Γ ⊢ e : l }} ->
+        (fold_left join ls l) ⊑ confidentiality_of_channel ch ->
         ev = match ch with Public => Some (Output v) | Secret => None end -> 
     exec_with_gamma
       ( Some (JOutput ch e), S, P, m, t ) Γ ls
@@ -423,9 +425,9 @@ Inductive incomplete_bridge : jconfig -> context -> list confidentiality -> nat 
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
       ev
-      ( Some c', S', P', m', t' ) Γ' ls' ->
+      ( c', S', P', m', t' ) Γ' ls' ->
     incomplete_bridge
-      ( Some c', S', P', m', t' ) Γ' ls'
+      ( c', S', P', m', t' ) Γ' ls'
       n
       ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
     incomplete_bridge

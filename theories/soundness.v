@@ -194,37 +194,41 @@ Qed.
 
 
 (* executing implies executing with gammas *)
-Lemma can_exec_with_gamma Γ0 pc0 P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 :
+Lemma can_exec_with_gamma Γ0 pc0 P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 Γf:
   wf_memory m0 Γ0 ->
-  ( c0 , P0, S0, m0, t0 ) ---> (c1, P1, S1, m1, t1) ->
+  -{ Γ0, pc0  ⊢ c0 ~> Γf }- ->
+  ( Some c0 , P0, S0, m0, t0 ) ---> (c1, P1, S1, m1, t1) ->
   exists j1 Γ1 pc1 ev,
     exec_with_gamma
-      ( option_map jcommand_of_command c0 , P0, S0, m0, t0 ) Γ0 [pc0]
+      ( Some (jcommand_of_command c0) , P0, S0, m0, t0 ) Γ0 [pc0]
       ev
       ( j1, P1, S1, m1, t1 ) Γ1 pc1  /\ option_map command_of_jcommand j1 = c1.
 Proof.
-  intros Hwf Hstep.
-  destruct c0 as [c0|]; [|by inversion Hstep].
+  intros Hwf Htype Hstep.
+(*  destruct c0 as [c0|]; [|by inversion Hstep]. *)
 
-  generalize dependent c1.
+  generalize dependent c1; generalize dependent Γf.
   induction c0; intros;
     try by inversion Hstep; subst; repeat eexists; econstructor.
-  - inversion Hstep; subst.
-    destruct (has_security_level _ _ _ _  H0 Hwf) as [l He].
+  - inversion Hstep; subst. inversion Htype; subst. 
+(*    destruct (has_security_level _ _ _ _  H0 Hwf) as [l He]. *)
     repeat eexists. econstructor => //. done.
-  - inversion Hstep; subst.
-    + apply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+  - inversion Htype; subst. inversion Hstep; subst.
+    + eapply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
       destruct j1 => //. repeat eexists. econstructor => //=.
-      inversion Ht. simpl. rewrite command_id. done.
-    + apply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+      inversion Ht. simpl. rewrite command_id. done. done.
+    + eapply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
       destruct j1 => //. repeat eexists. eapply GSeq2 => //.
-      simpl. rewrite command_id. done. 
-  - inversion Hstep; subst.
-    destruct (has_security_level _ _ _ _ H0 Hwf) as [l He].
+      simpl. rewrite command_id. done. done.
+  - inversion Hstep; subst. inversion Htype; subst.
+(*    destruct (has_security_level _ _ _ _ H0 Hwf) as [l He]. *)
     eexists _,_,_,_. split. econstructor => //. simpl.
     destruct (v =? 0)%nat; simpl; rewrite command_id => //.
   - inversion Hstep; subst.
     repeat eexists. econstructor. simpl. rewrite command_id. done.
+  - inversion Hstep; subst. inversion Htype; subst.
+(*    destruct (has_security_level _ _ _ _ H0 Hwf) as [l He]. *)
+    repeat eexists. econstructor => //. simpl. rewrite join_comm in H5. done. done.
 Qed.
 
 Lemma jtype_adequacy Γ0 pc0 c0 Γf pc:
@@ -767,21 +771,138 @@ Admitted. *)
  (* Proof. *)
  (* Admitted. *)
 
+
+  Lemma agree_update Γ m1 m2 s vg v:
+    agree_on_public Γ m1 m2 ->
+    agree_on_public (<[ s := vg ]> Γ) (<[ s := v ]> m1) (<[ s := v ]> m2).
+  Proof.
+  Admitted. 
+
   
-   Lemma bridge_agree j S1 P m1 t1 Γ pc k ev j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k' ev' j2 S2f P2f m2f t2f Γ2 pc2:
+ 
+   Lemma exec_agree j S1 P m1 t1 Γ pc ev j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 ev' j2 S2f P2f m2f t2f Γ2 pc2:
      agree_on_public Γ m1 m2 ->
      (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
-     bridge (Some j , S1 , P , m1 , t1) Γ pc
-       k ev
+     exec_with_gamma (Some j , S1 , P , m1 , t1) Γ pc
+       (Some ev)
        (j1, S1f, P1f, m1f, t1f ) Γ1 pc1 ->
-     bridge (Some j, S2, P, m2, t2 ) Γ pc
-       k' ev'
+     exec_with_gamma (Some j, S2, P, m2, t2 ) Γ pc
+       (Some ev')
        (j2, S2f, P2f, m2f, t2f ) Γ2 pc2 ->
-     k = k' /\ ev = ev' /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
+     ev = ev' /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
    Proof.
-   Admitted.
+     intros Hm Ht Hex1 Hex2.
+     generalize dependent j1; generalize dependent j2; generalize dependent pc2;
+       generalize dependent pc1.
+     induction j; intros; inversion Hex1; inversion Hex2; subst.
+     - eapply expr_type_unique in H36; last exact H16. subst. destruct l0 => //.
+       eapply eval_expr_public in H35; try exact H15. 2: done. 2: done.
+       subst. rewrite - H38 in H18. inversion H18; subst.
+       repeat split => //. by apply agree_update.
+     - eapply IHj1 in H15. 2:exact H32.
+       destruct H15 as (-> & Hc & -> & -> & -> & Hmf & Htf).
+       inversion Hc; subst. repeat split => //.
+     - eapply IHj1 in H15. 2:exact H32.
+       destruct H15 as (_ & ? & _) => //.
+     - eapply IHj1 in H15. 2: exact H32.
+       destruct H15 as (_ & ? & _) => //.
+     - eapply IHj1 in H15. 2: exact H32.
+       destruct H15 as (-> & _ & -> & -> & -> & Hmf & Htf).
+       repeat split => //.
+     - inversion H20; subst. repeat split => //. by apply agree_update.
+       simpl. by rewrite Ht.
+     - destruct c => //.
+       eapply eval_expr_public in H35; try exact H16; try done.
+       subst. rewrite - H18 in H38. inversion H38; subst. repeat split => //.
+       simpl. by rewrite Ht.
+       destruct l0 => //. rewrite fold_secret in H37. done.
+     - eapply IHj in H14. 2:exact H30.
+       destruct H14 as (-> & Hj & -> & -> & -> & Hmf & Htf).
+       inversion Hj; subst. repeat split => //.
+     - eapply IHj in H14. 2: exact H30.
+       destruct H14 as (_ & ? & _) => //.
+     - eapply IHj in H14. 2: exact H30.
+       destruct H14 as (_ & ? & _) => //.
+     - eapply IHj in H14. 2: exact H30.
+       destruct H14 as (-> & _ & -> & -> & Hpc & Hmf & Htf).
+       inversion Hpc; subst.
+       repeat split => //.
+   Qed. 
+                                 
+       
+    Lemma exec_disagree j S1 P m1 t1 Γ pc ev j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 j2 S2f P2f m2f t2f Γ2 pc2:
+     agree_on_public Γ m1 m2 ->
+     (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
+     exec_with_gamma (Some j , S1 , P , m1 , t1) Γ pc
+       (Some ev)
+       (j1, S1f, P1f, m1f, t1f ) Γ1 pc1 ->
+     exec_with_gamma (Some j, S2, P, m2, t2 ) Γ pc
+       None
+       (j2, S2f, P2f, m2f, t2f ) Γ2 pc2 ->
+     False.
+    Proof.
+      intros Hm Ht Hex1 Hex2.
+      generalize dependent j1; generalize dependent j2; generalize dependent pc2;
+        generalize dependent pc1.
+      induction j; intros; inversion Hex1; inversion Hex2; subst.
+       - eapply expr_type_unique in H36; last exact H16. subst. destruct l0 => //.
+       - eapply IHj1 in H15. 2:exact H32. done.
+       - eapply IHj1 in H15. 2:exact H32. done.
+       - eapply IHj1 in H15. 2: exact H32. done.
+       - eapply IHj1 in H15. 2: exact H32. done.
+       - done.
+       - destruct c => //.
+       - eapply IHj in H14. 2:exact H30. done.
+       - eapply IHj in H14. 2: exact H30. done.
+       - eapply IHj in H14. 2: exact H30. done.
+       - eapply IHj in H14. 2: exact H30. done.
+    Qed. 
 
-   Lemma exec_with_gamma_no_event j S P m t Γ pc j' S' P' m' t' Γ' pc' ev:
+
+    Lemma agree_on_public_comm Γ m1 m2 :
+      agree_on_public Γ m1 m2 ->
+      agree_on_public Γ m2 m1.
+    Proof.
+    Admitted. 
+
+    Lemma bridge_sequence j1 j2 S P m t Γ pc n ev j' S' P' m' t' Γ' pc':
+      bridge (Some (JSeq j1 j2), S, P, m, t) Γ pc n ev (j', S', P', m', t') Γ' pc' ->
+      (exists k Sm Pm mm tm Γm pcm, k < Datatypes.S n /\
+                                 incomplete_bridge (Some j1, S, P, m, t) Γ pc
+                                   k
+                                   (None, Sm, Pm, mm, tm) Γm pcm /\
+                                 bridge (Some j2, Sm, Pm, mm, tm) Γm pcm
+                                   (n - k) ev
+                                   (j', S', P', m', t') Γ' pc') \/
+        exists j1', bridge (Some j1, S, P, m, t) Γ pc n ev (j1', S', P', m', t') Γ' pc' /\
+                 j' = match j1' with Some j1' => Some (JSeq j1' j2)
+                                | None => Some j2 end.
+    Proof.
+      intros Hbr.
+
+      generalize dependent j1; generalize dependent S; generalize dependent P;
+        generalize dependent m; generalize dependent t; generalize dependent Γ;
+        generalize dependent pc.
+      induction n; intros; inversion Hbr; subst.
+      - inversion H14; subst; right; eexists; split; try by econstructor; try done.
+      - inversion H15; subst.
+        + apply IHn in H16 as [ (k & Sm & Pm & mm & tm & Γm & pcm & Hk & Hib & Hb)
+                              | (j1' & Hb & Hj') ].
+          * left. repeat eexists. instantiate (1 := Datatypes.S _).
+            2:{ econstructor. 2: exact H17. done. exact Hib. }
+            lia. exact Hb.
+          * right. eexists. split => //. econstructor. exact H17. exact Hb.
+        + left. repeat eexists. instantiate (1 := Datatypes.S _).
+          2:{ econstructor. 2: exact H17. done. econstructor. }
+          lia. replace (Datatypes.S n - 1) with n; last lia. exact H16.
+    Qed.
+
+
+    Lemma agree_refl Γ m : agree_on_public Γ m m.
+    Proof.
+    Admitted.
+
+      Lemma exec_with_gamma_no_event j S P m t Γ pc j' S' P' m' t' Γ' pc' ev:
      match ev with | None | Some (Write _ _) => True | _ => False end ->
      exec_with_gamma (j, S, P, m, t) Γ pc ev (j', S', P', m', t') Γ' pc' ->
      (⟦ t ⟧p) = (⟦ t' ⟧p).
@@ -800,22 +921,114 @@ Admitted. *)
    Qed. 
 
    
-   Lemma incomplete_bridge_keeps_trace j S P m t Γ pc k j' S' P' m' t' Γ' pc':
+
+
+
+    Lemma incomplete_bridge_preservation j S P m t Γ pc k j' S' P' m' t' Γ' pc':
      incomplete_bridge (j, S, P, m, t) Γ pc k (j', S', P', m', t') Γ' pc' ->
-     (⟦ t ⟧p) = (⟦ t' ⟧p).
+     P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p = ⟦ t' ⟧p).
    Proof.
      intros Hbr.
-     destruct j; last by inversion Hbr.
+     destruct j; last first.
+     { inversion Hbr; subst. repeat split. by apply agree_refl. }
      generalize dependent j; generalize dependent S; generalize dependent P;
        generalize dependent m; generalize dependent t; generalize dependent Γ;
        generalize dependent pc.
      induction k; intros; inversion Hbr; subst => //.
-     eapply IHk in H16.
-     rewrite - H16.
-     by eapply exec_with_gamma_no_event.
+     { repeat split => //. by apply agree_refl. }
+     destruct c'; last first.
+     { inversion H16; subst. apply exec_with_gamma_no_event in H15 => //.
+     - eapply IHk in H16 as (-> & Hm & H16).
+       rewrite - H16.
+       eapply exec_with_gamma_no_event in H15.
    Qed. 
 
 
+   Lemma incomplete_bridge_agree j S1 P m1 t1 Γ pc k S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k' S2f P2f m2f t2f Γ2 pc2:
+     agree_on_public Γ m1 m2 ->
+     (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
+     incomplete_bridge (Some j , S1 , P , m1 , t1) Γ pc
+       k 
+       (None, S1f, P1f, m1f, t1f ) Γ1 pc1 ->
+     incomplete_bridge (Some j, S2, P, m2, t2 ) Γ pc
+       k' 
+       (None, S2f, P2f, m2f, t2f ) Γ2 pc2 ->
+     k = k' /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
+   Proof.
+     intros Hm Ht Hbr1 Hbr2.
+     
+     induction k; intros; inversion Hbr1; inversion Hbr2; subst => //=.
+     
+
+    
+   Lemma bridge_agree j S1 P m1 t1 Γ pc k ev j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k' ev' j2 S2f P2f m2f t2f Γ2 pc2:
+     agree_on_public Γ m1 m2 ->
+     (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
+     bridge (Some j , S1 , P , m1 , t1) Γ pc
+       k ev
+       (j1, S1f, P1f, m1f, t1f ) Γ1 pc1 ->
+     bridge (Some j, S2, P, m2, t2 ) Γ pc
+       k' ev'
+       (j2, S2f, P2f, m2f, t2f ) Γ2 pc2 ->
+     k = k' /\ ev = ev' /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
+   Proof.
+     intros Hm Ht Hbr1 Hbr2.
+     generalize dependent j; generalize dependent S1; generalize dependent P;
+       generalize dependent m1; generalize dependent t1; generalize dependent Γ;
+       generalize dependent pc; generalize dependent S2; generalize dependent m2;
+       generalize dependent t2.
+     induction k; intros.
+     - inversion Hbr1; inversion Hbr2; subst.
+       eapply exec_agree in H31. 4: exact H14. 2: done. 2: done.
+       destruct H31 as (-> & -> & -> & -> & -> & Hmf & Htf).
+       repeat split => //.
+       eapply exec_disagree in H31. 4: exact H14. all:done.
+     - generalize dependent S1; generalize dependent P; generalize dependent m1;
+         generalize dependent t1; generalize dependent Γ; generalize dependent pc.
+       induction j; intros.
+       + inversion Hbr1; subst. inversion H15.
+       + inversion Hbr1; subst. inversion H15.
+       + apply bridge_sequence in Hbr1 as
+             [ (k1 & Sm1 & Pm1 & mm1 & tm1 & Γm1 & pcm1 & Hk1 & Hib1 & Hb1)
+             | (j1' & Hb1 & Hj'1) ];
+         apply bridge_sequence in Hbr2 as
+             [ (k2 & Sm2 & Pm2 & mm2 & tm2 & Γm2 & pcm2 & Hk2 & Hib2 & Hb2)
+             | (j2' & Hb2 & Hj'2) ].
+         * eapply IHj2 in Hb1.
+
+         eapply IHk in H16. 4: exact H34.
+
+
+       intros Hm Ht Hbr1 Hbr2.
+     generalize dependent j; generalize dependent S1; generalize dependent P;
+       generalize dependent m1; generalize dependent t1; generalize dependent Γ;
+       generalize dependent pc; generalize dependent S2; generalize dependent m2;
+       generalize dependent t2.
+     induction k; intros ; inversion Hbr1; inversion Hbr2; subst.
+     - eapply exec_agree in H31. 4: exact H14. 2: done. 2: done.
+       destruct H31 as (-> & -> & -> & -> & -> & Hmf & Htf).
+       repeat split => //.
+     - eapply exec_disagree in H31. 4: exact H14. all:done.
+     - eapply exec_disagree in H15. 4: exact H33. done. by apply agree_on_public_comm.
+       done.
+     - 
+
+       induction j; inversion H15; inversion H33; subst.
+       + apply bridge_sequence in H16 as
+             [ (k1 & Sm1 & Pm1 & mm1 & tm1 & Γm1 & pcm1 & Hk1 & Hib1 & Hb1)
+             | (j1' & Hb1 & Hj'1) ];
+         apply bridge_sequence in H34 as
+             [ (k2 & Sm2 & Pm2 & mm2 & tm2 & Γm2 & pcm2 & Hk2 & Hib2 & Hb2)
+             | (j2' & Hb2 & Hj'2) ].
+         * eapply IHj1 .
+
+         eapply IHk in H16. 4: exact H34.
+
+
+     uasinasn
+   Admitted.
+
+ 
    Lemma bridges_none S P m t Γ pc k evs jc Γ' pc' :
      bridges (None, S, P, m, t) Γ pc k evs jc Γ' pc' ->
      False.
