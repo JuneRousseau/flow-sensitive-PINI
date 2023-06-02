@@ -501,7 +501,7 @@ Inductive full_bridges : jconfig -> context -> list confidentiality -> list publ
 | NoPublicEvents: forall jc0 Γ0 ls0 jc1 Γ1 ls1 jc2 Γ2 ls2 k1 evs k2,
     write_bridges jc0 Γ0 ls0 k1 evs jc1 Γ1 ls1 ->
     silent_bridge jc1 Γ1 ls1 k2 jc2 Γ2 ls2 ->
-    full_bridges jc0 Γ0 ls0 evs jc2 Γ2 ls2.
+    full_bridges jc0 Γ0 ls0 [] jc2 Γ2 ls2.
 
 Fixpoint trace_of_public_trace evs :=
   match evs with
