@@ -17,13 +17,20 @@
 
 \usepackage{mathpartir}
 \usepackage{pftools}
-\usepackage{}
+\usepackage{tikz-cd}
+\usetikzlibrary{cd}
 
+% Notations
 \newcommand{\pc}{\mathrm{pc}}
+\newcommand{\lpc}{\mathrm{lpc}}
 \newcommand{\ctx}{\Gamma}
+\newcommand{\conf}{\sigma}
 \newcommand{\public}{\mathrm{LPublic}}
 \newcommand{\secret}{\mathrm{LSecret}}
-\newcommand{\typing}[4]{ #1, #2 \vdash #3 \rightsquigarrow #4}
+\newcommand{\typing}[4]{ #1,~#2 \vdash #3 \rightsquigarrow #4}
+\newcommand{\typingaux}[5]{ #1,~#2 \vdash #3 \rightsquigarrow #4,~#5}
+\newcommand{\execaux}[7] { (#1,~#2,~#3) \xrightarrow{#4} (#5,~#6,~#7) }
+% (config, Γ, lpc) - ev -> (config_f, Γf, lpcf)
 
 \newcommand{\join}[2]{#1 \sqcup #2}
 \newcommand{\joinc}[3][\pc]{#2 \sqcup #3}
@@ -31,7 +38,9 @@
 \newcommand{\etyping}[3]{ #1 \vdash #2 : #3}
 \newcommand{\pini}[1]{\mathrm{PINI}(#1)}
 
+% Environment
 \newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
 
 \title{
    Flow-Sensitive Type System for PINI
@@ -146,7 +155,8 @@ level \( \pc \), command \( c \) is safe to execute and after execution, the con
 \( \ctx' \).
 
 \input{figures/typing_cmd.tex}
-\instruction{find better name than While1 and While2}
+
+\instruction{Explain while rule}
 
 \section{Soundness}%
 \label{sec:soundness}
@@ -159,52 +169,200 @@ states that any well-typed program is PINI.
 \subsection{Approach}%
 \label{subsec:approach}
 
-In order to prove the theorem, we follow and adapt the approach of (information flow lecture notes).
+In order to prove the theorem, we follow a similar approach than the one in (information flow
+lecture notes).
 
-Definition of an augmented language, that explicitly specify when we reach a join point. Definition
-of the semantic for the augmented language, that keep track of the type with the typing environment.
+First, we define an auxiliary, augmented language, that explicitly specify when we reach a join
+point. Then, the we define the auxiliary semantic, that keep track of the type with the typing
+environment and the current security level.
 
-We have a correspondence between the original language and the augmented syntax, and we show that
-the semantic are equivalent.
+Then, we show that this auxiliary language is somewhat equivalent to the original language, in the
+sense that there is a correspondence between them. As such, we can reason on the auxiliary language,
+and reflect the result on the original one with an adequacy theorem.
 
-Then we define a bridge relation, in order to reason about the transitions that emits a public
-event.
-The bridge relation reduces a state until it reaches either a terminal state, or emits a public
-event.
+Finally, the main proof remains on a bridge relation, that allows to reason precisely on the
+transitions that emits a public event.
 
-\instruction{ Preservation of well-formedness ?? }
 \subsection{Auxiliary language}%
 \label{subsec:aux_lang}
 
-The syntax of the auxiliary language is the following.
-\instruction{figure syntax auxiliary}
+% Syntax and opsem
+The syntax of the auxiliary language is similar to the WHILE language, but adds the following
+command explicit \emph{join}.
 
-The auxiliary language simply adds an explicit command \emph{join} in order to reason about the
-security level of the pc when leaving a if-then-else statement.
-\instruction{ Why do we need an explicit join ? }
+\[ \mathit{cmd}~::=~\cdots~|~\mathrm{Join} \]
+
+The Join needs to be explicit in order to reason about the security level of the pc when leaving a
+if-then-else branch.
 
 The operational semantic carries along the typing context, which associate a security level to the
-variables in the memory and to the pc.
-We use a vector of security labels to represent the pc.
+variables in the memory and to the pc. In order to reason about the join points, we need to remember
+the history of the previous pc: as such, the pc is actually a list security labels, where the head
+is the current security level.
+
+The relation \(\execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf_{f}}{\ctx_{f}}{\lpc_{f}} \)
+states that the configuration $\conf$, with the typing context $\ctx$, at the current security level
+$\lpc$ steps to the configuration $\conf_{f}$, with the new typing context $\ctx_{f}$ and the new
+security level $\lpc_{f}$, and emits the event $\alpha$. The emitted event can be empty.
 
 \instruction{figure opsem auxiliary}
 
-At every control-flow branch, we add the security label of the condition expression to the pc
-vector. As such, the current pc label is on top of the vector. When reaching a join, we remove the
-last pc from the vector. If the vector is empty, then the pc is public.
+The main feature of the operational semantic is the management of the pc:
+at every conditional branch, the history is incremented with the security label of the condition
+expression to the pc.
+When reaching a Join instruction, the last pc in the history is poped. If the history is empty, then
+the pc is public.
 
-\instruction{ Why do we need to proceed this way ? }
+Moreover, the language of event is enriched with a $Write$ event, that is emitted at every
+assignment of a public expression. We need to enrich the events because we need to keep track of the
+modifications in memory.
+% Because of the agree on memory
 
-We define a transformation that establishes an equivalence between the original language and the
-auxiliary language.
-The transformation from the auxiliary language to the original language consists on erasing the join
-command.
+\instruction{
+  In the Coq development, the Join takes a command as an argument. In the operational semantic,
+  $\mathrm{Join}\ c$ reduces to $c$, while it reduces to $\mathrm{Skip}$ in this case. The reason is
+  that it simplifies the adequacy theorem, as there is a one-to-one correspondence between each
+  steps. In fine, the two definition are equivalent.
+}
 
-The adequacy of the auxiliary language establishes that it is equivalent to the original language.
-% From the original language, an if-then-else instruction becomes a sequence of if-then-else ; join.
+% We define the reflexive and transitive cloture of the relation, which records the trace of the
+% events.
+
+We also define a typing judgment for the auxiliary language, which refines the typing judgment of
+the original language.
+First, the typing judgment also capture the pc after the execution of the command. Then, as the pc
+is now an history of pc, all conditions over the pc takes the join of the history.
+\instruction{reformulate the previous sentence}
+
+The typing system is also extended a rule for the join, which captures the fact that a Join leaves
+the current security level by removing the head pc of the history.
+
+\[
+    \inferH{Join}
+    {\typingaux{\ctx}{\lpc}{c}{\ctx'}{\pc::\lpc'}}
+    {\typingaux{\ctx}{\lpc}{\mathrm{Join}~c}{\ctx'}{\lpc'}}
+\]
+
+
+The auxiliary language and type-system enjoy some interesting properties.
+
+% Preservation
+The preservation lemma states that if a well-typed term takes a step, then the resulting term is
+well-typed, under the (potentially) new typing context.
+
+\begin{lemma}[Preservation]
+  Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
+  $\conf' \triangleq (c',~S',~P',~m',~\tau')$ be configurations.
+  Let further suppose:
+  \begin{itemize}
+    \item $m$ be well-formed memory wrt. $\ctx$
+    \item $\typingaux{\ctx}{\lpc}{c}{\ctx_{f}}{\lpc_{f}}$
+    \item \( \execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf'}{\ctx'}{\lpc'} \)
+  \end{itemize}
+
+  Then, $m'$ is well-formed wrt. $\ctx'$, and the command $c'$ is also well-typed
+  $\typingaux{\ctx'}{\lpc'}{c'}{\ctx_{f}}{\lpc_{f}}$.
+\end{lemma}
+
+% Adequacy wrt. the WHILE language
+In order to establishes an equivalence between the original language and the auxiliary language, we
+define a transformation from the auxiliary language to the original language, which consists on
+erasing the join command; and a transformation from the original language to the original language,
+which consists on adding the join command after every if-then-else.
+
+The equivalence between the two languages are reflected via the two following adequacy theorems:
+
+\begin{lemma}[Adequacy auxiliary typing]
+  For any $\ctx$, $\pc$, $c$ and $\ctx_{f}$,
+  \[
+  \typing{\ctx}{\pc}{c}{\ctx_{f}}
+  \Leftrightarrow
+    \typingaux{\ctx}{\lpc}{c}{\ctx_{f}}{\lpc}
+  \]
+
+  where $\pc$ is lifted to $\lpc$.
+\end{lemma}
+
+The adequacy of the auxiliary typing establishes that the transformation from one language to
+another preserves the typing judgment for the corresponding language.
+
+\begin{lemma}[Adequacy auxiliary language]
+  Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
+  $\conf' \triangleq (c',~S',~P',~m',~\tau')$ be configurations.
+  Let suppose:
+  \begin{itemize}
+    \item $m$ be well-formed memory wrt. $\ctx$
+    \item $\typing{\ctx}{\pc}{c}{\ctx_{f}}$
+    \item $\conf$ steps to $\conf'$
+  \end{itemize}
+
+  Then, it exists $j'$, $\ctx'$, $\lpc'$ and $\alpha$ such that
+
+  \( \execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf'}{\ctx'}{\lpc'} \),
+
+  where $\pc$ is lifted to $\lpc$, the configuration $\conf$ uses the transformation of the command,
+  and the resulting command $j'$ of configuration $\conf'$ is the transformation of the command $c'$.
+\end{lemma}
+
+The adequacy of the auxiliary language establishes that, if the memory is well-formed, the
+command is well-typed in the original language, and takes a step, then we can also take a similar
+step in the auxiliary language.
+
+In the following diagram, the adequacy lemma states that $j'$ is the compilation of $c'$:
+\begin{tikzcd}
+compile(c) \arrow[r]  & j'                   \\
+c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
+\end{tikzcd}
+
+\instruction{transition}
 
 \subsection{Bridge relation}%
 \label{subsec:brigde_rel}
+
+Bridge relation : two states bridge in n steps, if they take n-1 steps without emitting any public
+event, and then take a non-write public event.
+
+Write-bridge relation : two states write-bridge in n steps, if they take n-1 steps without emitting
+any public event, and then take a write public event.
+
+Silent-bridge relation : two states silent-bridge in n steps, if they take n steps without emitting
+any public event.
+
+We define the transitive closure for the bridge relations. In particular, bridge and write-bridge
+are not reflexive, as they impose at least one step emitting a public event.
+
+\instruction{motivation for this bunch of relations ?}
+
+% TODO rename adequacy
+\input{figures/bridge_agree.tex}
+
+We can derive two main theorems
+\begin{theorem}[Bridge adequacy]
+  If c typecheck,
+  m well-formed memory,
+  c takes n steps
+
+  then, it exists a relation in the bridge figure, and the public events
+  emitted by the steps are the same as the trace emitted by the bridge (by erasing the writes)
+
+\end{theorem}
+
+
+
+\begin{theorem}[Bridge agree]
+  We start with two configurations that agree on publics, a command that that is well typed, two
+  final traces that have the same length on the publics event, and bridges (first part).
+
+  Then the final command is the same, the final memory agree on publics, and the emitted events are
+  the same.
+\end{theorem}
+
+It corresponds to the first transition on top of Figure~\ref{fig:bridge_agree}.
+
+Two other lemmas capturing that write-bridge and silent-bridge emit the same trace (but they don't
+have to agree on memory anymore)
+
+
 
 \subsection{Main theorem}%
 \label{subsec:main_theorem}

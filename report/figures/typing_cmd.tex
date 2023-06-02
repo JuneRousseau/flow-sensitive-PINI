@@ -27,17 +27,10 @@
     {\typing{\ctx}{\pc}{\mathrm{If}~e~c_{1}~c_{2}}{\joinc{\ctx_{1}}{\ctx_{2}}}}
     \and
 
-    \inferH{While1}
-    { \etyping{\ctx}{e}{ \ell } \and
-      \typing{\ctx}{\join{\pc}{\ell}}{c}{\ctx}
-    }
-    {\typing{\ctx}{\pc}{\mathrm{While}~e~c}{\ctx}}
-    \and
-
-    \inferH{While2}
-    { \etyping{\ctx}{e}{ \ell } \and
-      \typing{\ctx}{\join{\pc}{\ell}}{c}{\ctx''} \and
-      \typing{\ctx''}{\join{\pc}{\ell}}{c}{\ctx'}
+    \inferH{While}
+    { \flowsto{\ctx}{\ctx'} \and
+      \etyping{\ctx'}{e}{ \ell } \and
+      \typing{\ctx'}{\join{\pc}{\ell}}{c}{\ctx'}
     }
     {\typing{\ctx}{\pc}{\mathrm{While}~e~c}{\ctx'}}
     \and
@@ -55,3 +48,19 @@
  \end{mathparpagebreakable}
   \caption{\label{fig:typing_cmd} Typing rules for commands }
 \end{figure}
+
+
+    % \inferH{While1}
+    % { \etyping{\ctx}{e}{ \ell } \and
+    %   \typing{\ctx}{\join{\pc}{\ell}}{c}{\ctx}
+    % }
+    % {\typing{\ctx}{\pc}{\mathrm{While}~e~c}{\ctx}}
+    % \and
+
+    % \inferH{While2}
+    % { \etyping{\ctx}{e}{ \ell } \and
+    %   \typing{\ctx}{\join{\pc}{\ell}}{c}{\ctx''} \and
+    %   \typing{\ctx''}{\join{\pc}{\ell}}{c}{\ctx'}
+    % }
+    % {\typing{\ctx}{\pc}{\mathrm{While}~e~c}{\ctx'}}
+    % \and
