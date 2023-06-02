@@ -1293,10 +1293,31 @@ Admitted. *)
          eapply jtype_preservation_bridge in H0 as [??] => //.
    Qed.
 
+
+   Lemma write_bridge_preservation j S P m t Γ pc k evs j' S' P' m' t' Γ' pc':
+     write_bridge (j, S, P, m, t) Γ pc k evs (j', S', P', m', t') Γ' pc' ->
+     (⟦ t ⟧p) = (⟦ t' ⟧p).
+   Proof.
+     intros Hbr.
+     generalize dependent j; generalize dependent S; generalize dependent P;
+       generalize dependent m; generalize dependent t; generalize dependent Γ;
+       generalize dependent pc.
+     induction k; intros; inversion Hbr; subst.
+     - apply exec_with_gamma_no_event in H14 => //.
+     - apply exec_with_gamma_no_event in H15 => //.
+       apply IHk in H16 => //. by rewrite H15 H16.
+   Qed. 
+
+
+   
    Lemma write_bridges_preservation j S P m t Γ pc k evs j' S' P' m' t' Γ' pc':
      write_bridges (j, S, P, m, t) Γ pc k evs (j', S', P', m', t') Γ' pc' ->
      (⟦ t ⟧p) = (⟦ t' ⟧p).
    Proof.
+
+
+
+     iuasn
    Admitted. 
    
 
