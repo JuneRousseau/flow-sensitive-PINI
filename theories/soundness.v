@@ -22,6 +22,83 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
     end
 .
 
+Lemma agree_refl Γ m : wf_memory m Γ -> agree_on_public Γ m m. 
+Proof. intros H x. specialize (H x).
+       destruct (m !! x), (Γ !! x) => //. destruct c => //.
+Qed.
+
+Lemma agree_on_public_comm Γ m1 m2 :
+  agree_on_public Γ m1 m2 ->
+  agree_on_public Γ m2 m1.
+Proof.
+  intros H x. specialize (H x). destruct (m1 !! x), (m2 !! x), (Γ !! x) => //.
+  destruct c => //.
+Qed. 
+
+Lemma agree_on_public_trans Γ m1 m2 m3:
+  agree_on_public Γ m1 m2 -> agree_on_public Γ m2 m3 -> agree_on_public Γ m1 m3.
+Proof.
+  intros H1 H2 x.  specialize (H1 x). specialize (H2 x).
+  destruct (m1 !! x), (m2 !! x), (m3 !! x), (Γ !! x) => //.
+  destruct c => //. by subst. destruct c => //.
+Qed. 
+
+Lemma agree_update Γ m1 m2 s vg v:
+  agree_on_public Γ m1 m2 ->
+  agree_on_public (<[ s := vg ]> Γ) (<[ s := v ]> m1) (<[ s := v ]> m2).
+Proof.
+  intros H x. specialize (H x).
+  destruct (x =? s) eqn:Hx.
+  - apply String.eqb_eq in Hx as ->.
+    repeat rewrite lookup_insert. by destruct vg.
+  - apply String.eqb_neq in Hx.
+    repeat rewrite lookup_insert_ne => //.
+Qed.
+
+Lemma agree_update_secret Γ m s v :
+  Γ !! s = Some LSecret ->
+  wf_memory m Γ ->
+  agree_on_public Γ m (<[ s := v ]> m).
+Proof.
+  intros H Hm x. specialize (Hm x).
+  destruct (x =? s) eqn:Hx.
+  - apply String.eqb_eq in Hx as ->.
+    repeat rewrite lookup_insert. rewrite H. destruct (m !! s) => //.
+  - apply String.eqb_neq in Hx.
+    repeat rewrite lookup_insert_ne => //.
+    destruct (m !! x) eqn:Hmx; rewrite Hmx.
+    destruct (Γ !! x) => //. destruct c => //. destruct (Γ !! x) => //. 
+Qed.
+
+
+
+Definition context_agree (Γ1 Γ2: context) : Prop :=
+  forall x,
+    match Γ1 !! x, Γ2 !! x with
+    | Some LPublic, y | y, Some LPublic => y = Some LPublic
+    | _, _ => True
+    end.
+
+
+Lemma context_agree_refl Γ : context_agree Γ Γ.
+Proof.
+  intro x. destruct (Γ !! x) => //. destruct c => //.
+Qed.
+
+Lemma context_agree_sym Γ1 Γ2 : context_agree Γ1 Γ2 -> context_agree Γ2 Γ1.
+Proof.
+  intros H x. specialize (H x). destruct (Γ1 !! x), (Γ2 !! x) => //.
+  destruct c0, c => //.
+Qed.
+
+Lemma context_agree_trans Γ1 Γ2 Γ3 :
+  context_agree Γ1 Γ2 -> context_agree Γ2 Γ3 -> context_agree Γ1 Γ3.
+Proof.
+  intros H1 H2 x. specialize (H1 x). specialize (H2 x).
+  destruct (Γ1 !! x), (Γ2 !! x), (Γ3 !! x) => //.
+  destruct c, c0, c1 => //. all: destruct c, c0 => //.
+Qed. 
+
 (* If a memory agrees on public variable values, all public expressions evaluated in it
    are equal *)
  Lemma eval_expr_public gamma e m1 m2 v1 v2:
@@ -116,17 +193,30 @@ Lemma trace_monotone :
     exists (nw' ++ nw)%list.
     by rewrite app_assoc.
   Qed.
-
+  Lemma trace_monotone_write_bridge :
+   forall k c S P m t c' S' P' m' t' Γ pc ev Γ' pc',
+     write_bridge (c, S, P, m, t) Γ pc k ev (c', S', P', m', t') Γ' pc' ->
+     exists nw, t' = app nw t.
+  Proof.
+    destruct c as [c|]; last by inversion 1.
+    generalize dependent c.
+    induction k; intros * Hstep; inversion Hstep; subst;
+      try by eapply trace_monotone_with_gamma.
+    eapply trace_monotone_with_gamma in H15 as [nw ->].
+    eapply IHk in H16 as [nw' ->].
+    exists (nw' ++ nw)%list.
+    by rewrite app_assoc.
+  Qed.
   
-  Lemma trace_monotone_incomplete_bridge :
+  Lemma trace_monotone_silent_bridge :
     forall k c S P m t c' S' P' m' t' Γ pc Γ' pc',
-      incomplete_bridge (c, S, P, m, t) Γ pc k (c', S', P', m', t') Γ' pc' ->
+      silent_bridge (c, S, P, m, t) Γ pc k (c', S', P', m', t') Γ' pc' ->
       exists nw, t' = app nw t.
   Proof.
     induction k; intros * Hstep; inversion Hstep; subst.
     - by eexists nil.
-    - apply trace_monotone_with_gamma in H15 as [nw ->].
-      eapply IHk in H16 as [nw' ->].
+    - apply trace_monotone_with_gamma in H14 as [nw ->].
+      eapply IHk in H15 as [nw' ->].
       exists (nw' ++ nw)%list.
       by rewrite app_assoc.
   Qed.
@@ -144,19 +234,37 @@ Lemma trace_monotone :
       by rewrite app_assoc.
   Qed.
 
+    Lemma trace_monotone_write_bridges :
+    forall k c S P m t c' S' P' m' t' Γ pc Γ' pc' ev,
+      write_bridges (c, S, P, m, t) Γ pc k ev (c', S', P', m', t') Γ' pc' ->
+      exists nw, t' = app nw t.
+  Proof.
+    induction k; intros * Hstep; inversion Hstep; subst.
+    - by eexists nil.
+    - destruct jc' as [[[[??]?]?]?]. apply trace_monotone_write_bridge in H0 as [nw ->].
+      eapply IHk in H4 as [nw' ->].
+      exists (nw' ++ nw)%list.
+      by rewrite app_assoc.
+  Qed.
+
   
   Lemma trace_monotone_full_bridges :
-    forall c S P m t c' S' P' m' t' Γ pc Γ' pc' ev,
-      full_bridges (c, S, P, m, t) Γ pc ev (c', S', P', m', t') Γ' pc' ->
+    forall c S P m t c' S' P' m' t' Γ pc Γ' pc' evs,
+      full_bridges (c, S, P, m, t) Γ pc evs (c', S', P', m', t') Γ' pc' ->
       exists nw, t' = app nw t.
   Proof.
     intros * Hstep; inversion Hstep; subst.
-    - destruct jc' as [[[[??]?]?]?].
-    eapply trace_monotone_bridges in H as [nw ->].
-    eapply trace_monotone_incomplete_bridge in H0 as  [nw' ->].
-    exists (nw' ++ nw)%list.
-    by rewrite app_assoc.
-    - by eexists nil.
+    - destruct jc1 as [[[[??]?]?]?].
+      destruct jc2 as [[[[??]?]?]?].
+      eapply trace_monotone_bridges in H as [nw ->].
+      eapply trace_monotone_write_bridges in H0 as [nw' ->].
+      eapply trace_monotone_silent_bridge in H1 as  [nw'' ->].
+      exists (nw'' ++ nw' ++ nw)%list.
+      by repeat rewrite app_assoc.
+    - destruct jc1 as [[[[??]?]?]?].
+      eapply trace_monotone_write_bridges in H as [nw ->].
+      eapply trace_monotone_silent_bridge in H0 as [nw' ->].
+      exists (nw' ++ nw)%list. by rewrite app_assoc.
   Qed.
 
 
@@ -772,11 +880,7 @@ Admitted. *)
  (* Admitted. *)
 
 
-  Lemma agree_update Γ m1 m2 s vg v:
-    agree_on_public Γ m1 m2 ->
-    agree_on_public (<[ s := vg ]> Γ) (<[ s := v ]> m1) (<[ s := v ]> m2).
-  Proof.
-  Admitted. 
+ 
 
   
  
@@ -859,16 +963,12 @@ Admitted. *)
     Qed. 
 
 
-    Lemma agree_on_public_comm Γ m1 m2 :
-      agree_on_public Γ m1 m2 ->
-      agree_on_public Γ m2 m1.
-    Proof.
-    Admitted. 
+  
 
     Lemma bridge_sequence j1 j2 S P m t Γ pc n ev j' S' P' m' t' Γ' pc':
       bridge (Some (JSeq j1 j2), S, P, m, t) Γ pc n ev (j', S', P', m', t') Γ' pc' ->
       (exists k Sm Pm mm tm Γm pcm, k < Datatypes.S n /\
-                                 incomplete_bridge (Some j1, S, P, m, t) Γ pc
+                                 silent_bridge (Some j1, S, P, m, t) Γ pc
                                    k
                                    (None, Sm, Pm, mm, tm) Γm pcm /\
                                  bridge (Some j2, Sm, Pm, mm, tm) Γm pcm
@@ -889,20 +989,18 @@ Admitted. *)
         + apply IHn in H16 as [ (k & Sm & Pm & mm & tm & Γm & pcm & Hk & Hib & Hb)
                               | (j1' & Hb & Hj') ].
           * left. repeat eexists. instantiate (1 := Datatypes.S _).
-            2:{ econstructor. 2: exact H17. done. exact Hib. }
+            2:{ econstructor. 2: exact Hib. done. }
             lia. exact Hb.
           * right. eexists. split => //. econstructor. exact H17. exact Hb.
         + left. repeat eexists. instantiate (1 := Datatypes.S _).
-          2:{ econstructor. 2: exact H17. done. econstructor. }
+          2:{ econstructor. done. econstructor. }
           lia. replace (Datatypes.S n - 1) with n; last lia. exact H16.
     Qed.
 
 
-    Lemma agree_refl Γ m : agree_on_public Γ m m.
-    Proof.
-    Admitted.
+ 
 
-      Lemma exec_with_gamma_no_event j S P m t Γ pc j' S' P' m' t' Γ' pc' ev:
+    Lemma exec_with_gamma_no_event j S P m t Γ pc j' S' P' m' t' Γ' pc' ev:
      match ev with | None | Some (Write _ _) => True | _ => False end ->
      exec_with_gamma (j, S, P, m, t) Γ pc ev (j', S', P', m', t') Γ' pc' ->
      (⟦ t ⟧p) = (⟦ t' ⟧p).
@@ -918,15 +1016,39 @@ Admitted. *)
      - destruct c => //.
      - by eapply IHj.
      - by eapply IHj.
+   Qed.
+
+
+  
+
+     Lemma exec_with_gamma_event_none j S P m t Γ pc j' S' P' m' t' Γ' pc':
+     exec_with_gamma (j, S, P, m, t) Γ pc None (j', S', P', m', t') Γ' pc' ->
+     P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p) = (⟦ t' ⟧p).
+   Proof.
+     intros Hexec.
+     destruct j; last by inversion Hexec.
+     generalize dependent j'; generalize dependent S'; generalize dependent P';
+       generalize dependent m'; generalize dependent t'; generalize dependent Γ';
+       generalize dependent pc'.
+     induction j; intros; inversion Hexec ; subst => //.
+     all: try by repeat split => //; apply agree_refl.
+     - destruct l => //. repeat split => //. apply agree_update_secret => //.
+       rewrite lookup_insert. rewrite fold_secret. done.
+     - by eapply IHj1.
+     - by eapply IHj1.
+     - repeat split => //. apply agree_update_secret => //.
+       by rewrite lookup_insert.
+     - destruct c => //. repeat split => //. by apply agree_refl.
+     - by eapply IHj.
+     - by eapply IHj.
    Qed. 
+
 
    
 
-
-
-    Lemma incomplete_bridge_preservation j S P m t Γ pc k j' S' P' m' t' Γ' pc':
-     incomplete_bridge (j, S, P, m, t) Γ pc k (j', S', P', m', t') Γ' pc' ->
-     P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p = ⟦ t' ⟧p).
+    Lemma silent_bridge_preservation j S P m t Γ pc k j' S' P' m' t' Γ' pc':
+     silent_bridge (j, S, P, m, t) Γ pc k (j', S', P', m', t') Γ' pc' ->
+     public_equal Γ Γ' /\ P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p = ⟦ t' ⟧p).
    Proof.
      intros Hbr.
      destruct j; last first.
@@ -937,10 +1059,11 @@ Admitted. *)
      induction k; intros; inversion Hbr; subst => //.
      { repeat split => //. by apply agree_refl. }
      destruct c'; last first.
-     { inversion H16; subst. apply exec_with_gamma_no_event in H15 => //.
-     - eapply IHk in H16 as (-> & Hm & H16).
-       rewrite - H16.
-       eapply exec_with_gamma_no_event in H15.
+     { inversion H15; subst. apply exec_with_gamma_event_none in H14 => //. }
+     eapply IHk in H15 as (-> & Hm & H16).
+     rewrite - H16.
+     eapply exec_with_gamma_event_none in H14 as (-> & Hm' & Ht').
+     repeat split => //. eapply agree_on_public_trans.
    Qed. 
 
 

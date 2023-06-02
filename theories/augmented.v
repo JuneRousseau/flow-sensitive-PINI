@@ -414,23 +414,46 @@ Inductive bridge : jconfig -> context -> list confidentiality -> nat -> (* optio
       ( c'', S'', P'', m'', t'' ) Γ'' ls''
 .
 
-Inductive incomplete_bridge : jconfig -> context -> list confidentiality -> nat -> jconfig -> context -> list confidentiality -> Prop :=
+Inductive write_bridge : jconfig -> context -> list confidentiality -> nat -> public_event -> jconfig -> context -> list confidentiality -> Prop :=
+| WBridgeWrite : forall c S P m t t' Γ ls c' S' P' m' a b Γ' ls',
+    exec_with_gamma
+      ( Some c, S, P, m, t ) Γ ls
+      (Some (Write a b))
+      ( c', S', P', m', t') Γ' ls' ->
+    write_bridge
+      ( Some c, S, P, m, t) Γ ls
+      0 (Write a b)
+      ( c', S', P', m', t') Γ' ls'
+| WBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
+    exec_with_gamma
+      ( Some c, S, P, m, t ) Γ ls
+      None
+      ( Some c', S', P', m', t' ) Γ' ls' ->
+    write_bridge
+      ( Some c', S', P', m', t' ) Γ' ls'
+      n e
+      ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
+    write_bridge
+      ( Some c, S, P, m, t ) Γ ls
+      (Datatypes.S n) e
+      ( c'', S'', P'', m'', t'' ) Γ'' ls''.
+
+Inductive silent_bridge : jconfig -> context -> list confidentiality -> nat -> jconfig -> context -> list confidentiality -> Prop :=
 | IBridgeStop : forall jc Γ ls,
-    incomplete_bridge
+    silent_bridge
       jc Γ ls
       0
       jc Γ ls
-| IBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n c'' S'' P'' m'' t'' Γ'' ls'' ev,
-    match ev with | None | Some (Write _ _) => True | _ => False end ->
+| IBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n c'' S'' P'' m'' t'' Γ'' ls'',
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
-      ev
+      None
       ( c', S', P', m', t' ) Γ' ls' ->
-    incomplete_bridge
+    silent_bridge
       ( c', S', P', m', t' ) Γ' ls'
       n
       ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
-    incomplete_bridge
+    silent_bridge
       ( Some c, S, P, m, t ) Γ ls
       (Datatypes.S n)
       ( c'', S'', P'', m'', t'' ) Γ'' ls''
@@ -451,12 +474,34 @@ Inductive bridges : jconfig -> context -> list confidentiality -> nat -> list pu
     bridges jc Γ ls (Datatypes.S k) (ev :: evs) jc'' Γ'' ls''
 .
 
+Inductive write_bridges : jconfig -> context -> list confidentiality -> nat -> list public_event -> jconfig -> context -> list confidentiality -> Prop :=
+(* | LastBridge : forall jc Γ ls jc' Γ' ls' n,
+    incomplete_bridge jc Γ ls n jc' Γ' ls' -> bridges jc Γ ls 0 jc' Γ' ls' *)
+ | NoWBridge : forall jc Γ ls,
+     write_bridges jc Γ ls 0 [] jc Γ ls 
+(*| LastBridge : forall jc Γ ls ev jc' Γ' ls' n,
+    match ev with | Input _ | Output _ => True | _ => False end ->
+    bridge jc Γ ls n ev jc' Γ' ls' ->
+    bridges jc Γ ls 0 [ev] jc' Γ' ls' *)
+| MoreWBridge : forall jc Γ ls jc' Γ' ls' k jc'' Γ'' ls'' n ev evs,
+    write_bridge jc Γ ls n ev jc' Γ' ls' ->
+    write_bridges jc' Γ' ls' k evs jc'' Γ'' ls'' ->
+    write_bridges jc Γ ls (Datatypes.S k) (ev :: evs) jc'' Γ'' ls''
+.
+
+
+
+
 Inductive full_bridges : jconfig -> context -> list confidentiality -> list public_event -> jconfig -> context -> list confidentiality -> Prop :=
-| BridgesAndIncomplete: forall jc Γ ls k jc' Γ' ls' k' jc'' Γ'' ls'' evs,
-    bridges jc Γ ls k evs jc' Γ' ls' ->
-    incomplete_bridge jc' Γ' ls' k' jc'' Γ'' ls'' ->
-    full_bridges jc Γ ls evs jc'' Γ'' ls''
-| NoBridges : forall jc Γ ls, full_bridges jc Γ ls [] jc Γ ls.
+| BridgesAndEpilogue: forall jc0 Γ0 ls0 k0 jc1 Γ1 ls1 k1 jc2 Γ2 ls2 k2 evs0 evs1 jc3 Γ3 ls3,
+    bridges jc0 Γ0 ls0 k0 evs0 jc1 Γ1 ls1 ->
+    write_bridges jc1 Γ1 ls1 k1 evs1 jc2 Γ2 ls2 ->
+    silent_bridge jc2 Γ2 ls2 k2 jc3 Γ3 ls3 ->
+    full_bridges jc0 Γ0 ls0 (evs0 ++ evs1)%list jc3 Γ3 ls3
+| NoPublicEvents: forall jc0 Γ0 ls0 jc1 Γ1 ls1 jc2 Γ2 ls2 k1 evs k2,
+    write_bridges jc0 Γ0 ls0 k1 evs jc1 Γ1 ls1 ->
+    silent_bridge jc1 Γ1 ls1 k2 jc2 Γ2 ls2 ->
+    full_bridges jc0 Γ0 ls0 evs jc2 Γ2 ls2.
 
 Fixpoint trace_of_public_trace evs :=
   match evs with
