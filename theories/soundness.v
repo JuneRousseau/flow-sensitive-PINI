@@ -1314,11 +1314,16 @@ Admitted. *)
      write_bridges (j, S, P, m, t) Γ pc k evs (j', S', P', m', t') Γ' pc' ->
      (⟦ t ⟧p) = (⟦ t' ⟧p).
    Proof.
+     intros Hbr.
+     generalize dependent j; generalize dependent S; generalize dependent P;
+       generalize dependent m; generalize dependent t; generalize dependent Γ;
+       generalize dependent pc; generalize dependent evs.
+     induction k; intros; inversion Hbr; subst.
+     - done.
+     - destruct jc' as [[[[??]?]?]?]. apply write_bridge_preservation in H0 => //.
+       apply IHk in H4 => //. by rewrite H0 H4.
+   Qed. 
 
-
-
-     iuasn
-   Admitted. 
    
 
    Lemma typecheck_is_sound :
