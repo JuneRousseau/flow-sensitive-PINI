@@ -1,0 +1,11 @@
+\begin{figure}[ht]
+  \centering
+
+  \begin{tikzcd}
+    compile(c) \arrow[r, "b+"]                                                                 & c1' \arrow[r, "wb*"] & c2' \arrow[r, "sb*"]   & c3' \arrow[d, "adequacy", Rightarrow]   \\
+    c \arrow[u, "adequacy", Rightarrow] \arrow[d, "adequacy"', Rightarrow] \arrow[rrr, "exec"] &                      &                        & c'                                      \\
+    compile(c) \arrow[rr, "wb*"']                                                              &                      & c2'' \arrow[r, "sb*"'] & c3'' \arrow[u, "adequacy"', Rightarrow]
+  \end{tikzcd}
+
+  \caption{\label{fig:bridge_agree} Bridge agreement }
+\end{figure}
