@@ -1026,15 +1026,24 @@ Admitted. *)
    Qed.
 
 
+   Lemma wf_update_secret Γ m s :
+     wf_memory m Γ ->
+     wf_memory m (<[ s := LSecret ]> Γ).
+   Proof.
+   Admitted.  (* For this lemma to be true, we must update the definition of wf_memory *)
+(*     intros H x. specialize (H x).
+     destruct (x =? s) eqn:Hx.
+     - apply String.eqb_eq in Hx as ->.
+       repeat rewrite lookup_insert. destruct (m !! s) => //. *)
+   
   
 
    Lemma exec_with_gamma_event_none j S P m t Γ pc j' S' P' m' t' Γ' pc':
      wf_memory m Γ ->
      exec_with_gamma (j, S, P, m, t) Γ pc None (j', S', P', m', t') Γ' pc' ->
-     context_agree Γ Γ' /\ P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p) = (⟦ t' ⟧p).
+     (* context_agree Γ Γ' /\ *) P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p) = (⟦ t' ⟧p).
    Proof.
-   Admitted. 
-(*     intros Hm Hexec.
+     intros Hm Hexec.
      destruct j; last by inversion Hexec.
      generalize dependent j'; generalize dependent S'; generalize dependent P';
        generalize dependent m'; generalize dependent t'; generalize dependent Γ';
@@ -1043,14 +1052,15 @@ Admitted. *)
      all: try by repeat split => //; try apply agree_refl; try apply context_agree_refl.
      - destruct l => //. repeat split => //. apply agree_update_secret => //.
        rewrite lookup_insert. rewrite fold_secret. done.
+       rewrite fold_secret. by apply wf_update_secret.
      - by eapply IHj1.
      - by eapply IHj1.
      - repeat split => //. apply agree_update_secret => //.
-       by rewrite lookup_insert.
+       by rewrite lookup_insert. by apply wf_update_secret.
      - destruct c => //. repeat split => //. by apply agree_refl.
      - by eapply IHj.
      - by eapply IHj.
-   Qed.  *)
+   Qed.  
 
 
    
@@ -1104,11 +1114,11 @@ Admitted. *)
      bridge (Some j, S2, P, m2, t2 ) Γ pc
        k' ev'
        (j2, S2f, P2f, m2f, t2f ) Γ2 pc2 ->
-     k = k' /\ ev = ev' /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
+     (* k = k' /\ *) ev = ev' /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
    Proof.
-   Admitted. 
-
-   (*
+   Admitted.  
+(*
+   
    intros Hm Ht Hbr1 Hbr2.
      generalize dependent j; generalize dependent S1; generalize dependent P;
        generalize dependent m1; generalize dependent t1; generalize dependent Γ;
@@ -1121,7 +1131,8 @@ Admitted. *)
        repeat split => //.
        eapply exec_disagree in H31. 4: exact H14. all:done.
      - generalize dependent S1; generalize dependent P; generalize dependent m1;
-         generalize dependent t1; generalize dependent Γ; generalize dependent pc.
+         generalize dependent t1; generalize dependent Γ; generalize dependent pc;
+         generalize dependent k'; generalize dependent k.
        induction j; intros.
        + inversion Hbr1; subst. inversion H15.
        + inversion Hbr1; subst. inversion H15.
@@ -1131,7 +1142,9 @@ Admitted. *)
          apply bridge_sequence in Hbr2 as
              [ (k2 & Sm2 & Pm2 & mm2 & tm2 & Γm2 & pcm2 & Hk2 & Hib2 & Hb2)
              | (j2' & Hb2 & Hj'2) ].
-         * eapply IHj2 in Hb1.
+         * apply silent_bridge_preservation in Hib1 as (-> & Hm1 & Ht1).
+           destruct (S k - k1) eqn:Hk. lia.
+           eapply IHj2 in Hb2.
 
          eapply IHk in H16. 4: exact H34.
 
@@ -1252,7 +1265,7 @@ Admitted. *)
      - inversion Hred2; subst.
        + eapply bridge_agree in H2.
          4: exact H0. 3: done. 2: done.
-         destruct H2 as (-> & -> & -> & -> & -> & -> & Hm' & Ht').
+         destruct H2 as (-> & -> & -> & -> & -> & Hm' & Ht').
          done.
        + assert (H0' := H0).
          apply bridge_grow_trace in H0.
@@ -1263,7 +1276,7 @@ Admitted. *)
          rewrite - Hlen H1 H0 Ht in H2.
          eapply bridge_agree in H1'.
          4: exact H0'. 3: done. 2: done.
-         destruct H1' as (_ & -> & _).
+         destruct H1' as (-> & _).
          destruct ev0 => //; simpl in H2; lia.
      - inversion Hred2; subst.
        + assert (H0' := H0). assert (H1' := H1).
@@ -1274,13 +1287,13 @@ Admitted. *)
          rewrite Hlen H0 H1 Ht in H4.
          eapply bridge_agree in H1'.
          4: exact H0'. 3: done. 2: done.
-         destruct H1' as (_ & -> & _).
+         destruct H1' as (-> & _).
          destruct ev0 => //; simpl in H4; lia.
        + destruct jc'0 as [[[[ j0 S0 ] P0 ] m0 ] t0].
          destruct jc' as [[[[ j' S' ] P' ] m' ] t'].
          eapply bridge_agree in H.
          4: exact H0. 3: done. 2: done.
-         destruct H as (-> & -> & -> & -> & -> & -> & Hm' & Ht').
+         destruct H as (-> & -> & -> & -> & -> & Hm' & Ht').
          destruct j0.
          2:{ apply bridges_none in H4 => //. }        
          eapply IHk1 in H4.
