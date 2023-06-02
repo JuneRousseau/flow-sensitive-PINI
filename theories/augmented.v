@@ -497,7 +497,7 @@ Inductive full_bridges : jconfig -> context -> list confidentiality -> list publ
     bridges jc0 Γ0 ls0 k0 evs0 jc1 Γ1 ls1 ->
     write_bridges jc1 Γ1 ls1 k1 evs1 jc2 Γ2 ls2 ->
     silent_bridge jc2 Γ2 ls2 k2 jc3 Γ3 ls3 ->
-    full_bridges jc0 Γ0 ls0 (evs0 ++ evs1)%list jc3 Γ3 ls3
+    full_bridges jc0 Γ0 ls0 evs0 jc3 Γ3 ls3
 | NoPublicEvents: forall jc0 Γ0 ls0 jc1 Γ1 ls1 jc2 Γ2 ls2 k1 evs k2,
     write_bridges jc0 Γ0 ls0 k1 evs jc1 Γ1 ls1 ->
     silent_bridge jc1 Γ1 ls1 k2 jc2 Γ2 ls2 ->
