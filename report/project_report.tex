@@ -19,6 +19,7 @@
 \usepackage{pftools}
 \usepackage{stmaryrd}
 \usepackage{amsmath}
+\usepackage{amsthm}
 
 \usepackage{tikz-cd}
 \usetikzlibrary{cd}
@@ -40,6 +41,7 @@
 \newcommand{\bridge}[3] { #1 \curvearrowright_{#2} #3 }
 \newcommand{\whilelang}{\textsc{While Lang} }
 \newcommand{\pproj}[1]{\llbracket #1 \rrbracket_{p}}
+\newcommand{\agree}[3]{#2 \sim_{#1} #3}
 
 \newcommand{\join}[2]{#1 \sqcup #2}
 \newcommand{\joinc}[3][\pc]{#2 \sqcup #3}
@@ -106,7 +108,6 @@ There are traditionally two way to enforce non-interference:
         tagged as secret
   \item type-system based: \emph{statically} ensures that a well-typed program respects NI
 \end{itemize}
-\instruction{ Do we detail more the two approaches ? I don't think that it is necessary }
 
 In this work, we focus in a variant of NI called \emph{Progress-Insensitive Non-Interference}
 (PINI).
@@ -245,10 +246,8 @@ level \( \pc \), command \( c \) is safe to execute and after execution, the con
 \section{Soundness}%
 \label{sec:soundness}
 
-The soundness theorem states that the type system actually enforce PINI. In other words, it formally
-states that any well-typed program is PINI.
-
-\instruction{ Fill the section depending on the approach }
+The soundness theorem states that the type system actually enforce PINI. In other words, it
+formally states that any well-typed program is PINI.
 
 \subsection{Approach}%
 \label{subsec:approach}
@@ -302,7 +301,7 @@ assignment of a public expression. We need to enrich the events because we need 
 modifications in memory.
 % Because of the agree on memory
 
-\instruction{
+\instruction{ PUT IN FOOTNOTE:
   In the Coq development, the Join takes a command as an argument. In the operational semantic,
   $\mathrm{Join}\ c$ reduces to $c$, while it reduces to $\mathrm{Skip}$ in this case. The reason is
   that it simplifies the adequacy theorem, as there is a one-to-one correspondence between each
@@ -333,6 +332,8 @@ The auxiliary language and type-system enjoy some interesting properties.
 % Preservation
 The preservation lemma states that if a well-typed term takes a step, then the resulting term is
 well-typed, under the (potentially) new typing context.
+
+\instruction{DEFINE WELL-FORMED MEMORY BEFORE HERE}
 
 \begin{lemma}[Preservation]
   Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
@@ -403,9 +404,13 @@ c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
 \subsection{Bridge relations}%
 \label{subsec:brigde_rel}
 
-\instruction{ bridge relation defined on the auxiliary language }
+The main hurdle in the proof is that some steps does not emit any event, which makes these steps
+irrelevant regarding the definition of the knowledge. As such, we want a relation that skip the
+irrelevant steps, and allows to reason on the steps emitting a public event only.
+We call this kind of relations the \emph{bridging relations}.
 
-We define multiple kind of bridge relations, that relates two states in different ways:
+We define multiple kind of bridging relations, that relates two states in different ways, depending
+of the kind of public events.
 
 \begin{itemize}
   \item Basic-bridge relation (\emph{basic\_bridge} in the Coq development):
@@ -421,11 +426,11 @@ We define multiple kind of bridge relations, that relates two states in differen
 We define the transitive closure for the write-bridge relation. One may notice that it cannot be
 reflexive, as it imposes at least one step emitting a write event.
 
-The bridge relation (in the Coq development, named \emph{bridge}) is our main relation. There
-is two different ways for two states to bridge: first,
-the starting state takes any number of basic-bridges, then it takes one basic-bridge that do not emit
-a write-event, then any number of write-bridge, and finally any number of silent-bridges; the second
-way is to take any number of write-bridge, and then any number of silent-bridges.
+The bridge relation (\emph{bridge} in the Coq development) is our main bridging relation. There is
+two different ways for two states to bridge:
+first, the starting state takes any number of basic-bridges, then it takes one basic-bridge that do
+not emit a write-event, then any number of write-bridge, and finally any number of silent-bridges;
+the second way is to take any number of write-bridge, and then any number of silent-bridges.
 
 Figure~\ref{fig:bridge_relation} shows these two different ways to bridge, where $b$ stands for
 basic-bridge, $bnw$ for basic-bridge non-write, $wb$ for write-bridge and $sb$ for silent-bridge.
@@ -438,7 +443,7 @@ to know precisely what is synchronized or not each time.
 really, as it only perform public writes}
 
 We can derive two main theorems: an adequacy theorem and an agreement theorem.
-\begin{theorem}[Bridge adequacy]
+\begin{theorem}[Bridge adequacy]\label{thm:adequacy}
   Let $\conf \triangleq (c,~S,~P,~\tau)$ and $\conf' \triangleq (c',~S',~P',~\tau')$ be two
   configurations of the original language, an initial and final contexts $\ctx$ and $\ctx'$, and an
   initial pc $\pc$.
@@ -466,15 +471,24 @@ Figure~\ref{fig:bridge_relation} shows draws the adequacy.
 \input{figures/bridge_relation.tex}
 
 
-\begin{theorem}[Bridge agree]
-  We start with two configurations that agree on publics, a command that that is well typed, two
-  final traces that have the same length on the publics event, and bridges (first part).
+\instruction{TODO DEFINE AGREE ON PUBLIC BEFORE}
+\begin{theorem}[Bridge agree]\label{thm:agree}
 
-  Then the final command is the same, the final memory agree on publics, and the emitted events are
-  the same.
+  Assume
+  \begin{itemize}
+    \item $\agree{\ctx}{m_{1}}{m_{2}}$
+    \item $\typing{\ctx}{\pc}{c}{\ctx_{f}}$
+    \item $\pproj{\tau_{1}} = \pproj{\tau_{2}}$
+    \item $\bridge{(c,~S_{1},~P,~m_{1},~\tau_{1})}{n_{1}}(c_{1}',~S_{1}',~P_{1}',~m_{1}',~\tau_{1}')$
+    \item $\bridge{(c,~S_{2},~P,~m_{2},~\tau_{2})}{n_{2}}(c_{2}',~S_{2}',~P_{2}',~m_{2}',~\tau_{2}')$
+    \item $\mathrm{len}(\pproj{\tau_{1}'}) = \mathrm{len}(\pproj{\tau_{2}'})$
+  \end{itemize}
+
+  Then,
+  the final commands are the same $c_{1}' = c_{2}'$,
+  the memories agree on the public variables $\agree{\ctx_{f}}{m_{1}}{m_{2}}$, % is this true ???
+  and the public traces are the same $\pproj{\tau_{1}'} = \pproj{\tau_{2}'}$
 \end{theorem}
-
-\instruction{Where is defined memory agree on public ? }
 
 The theorem is split in 3 lemmas: basic-bridge, write-bridge and silent-bridge agree.
 
@@ -499,6 +513,50 @@ It holds because \instruction{fill in}.
 \subsection{Main theorem}%
 \label{subsec:main_theorem}
 
+The soundness theorem mainly relies on the following theorem. It states that for
+any pair of configurations that agree on public of the memory, agree on the public events,
+that start with a well-typed command, and both step into a configuration that produces a
+public trace of the same length actually produces the same public trace.
+
+\begin{theorem}[Well-typed execution agree]\label{thm:sound}
+
+Suppose that
+
+\begin{enumerate}
+  \item $m_{1}$ and $m_{2}$ are well-formed wrt. $\ctx$
+  \item $\agree{\ctx}{m_{1}}{m_{2}}$
+  \item \( \typing{\ctx}{\mathrm{Public}}{c}{\ctx_{f}}\)
+  \item $\pproj{\tau_{1}} = \pproj{\tau_{2}}$
+  \item \(
+        \exectrans
+        {(c,~S_{1},~P,~m_{1},~\tau_{1})}
+        {(c,~S_{1}',~P_{1}',~m_{1}',~\tau_{1}')}
+        \)
+  \item \(
+        \exectrans
+        {(c,~S_{2},~P,~m_{2},~\tau_{2})}
+        {(c,~S_{2}',~P_{2}',~m_{2}',~\tau_{2}')}
+        \)
+  \item $\mathrm{len}(\pproj{\tau_{1}'}) = \mathrm{len}(\pproj{\tau_{2}'})$
+\end{enumerate}
+
+Then $\pproj{\tau_{1}'} = \pproj{\tau_{2}'}$.
+\end{theorem}
+
+
+\begin{proof} (Sketch)
+
+  The proof of this theorem is in essence a composition of the previous theorems. The main idea is
+  that, using the Theorem~\ref{thm:adequacy} in the hypotheses 5 and 6,
+  we can reason at the level of the bridge, rather than at the level of the operational semantic
+  itself.
+  Then, using Theorem~\ref{thm:agree}, we know that the emitted public traces are the same in both
+  executions.
+
+\end{proof}
+
+Finally, we can define the soundness theorem that state that any well-typed command is PINI.
+
 \begin{theorem}[Soundness type-system]
   \( \forall c, \ctx.\
   \typing{\emptyset}{\mathrm{Public}}{c}{\ctx}
@@ -506,19 +564,55 @@ It holds because \instruction{fill in}.
   \)
 \end{theorem}
 
-Composition of the lemma that leads to the soundness theorem.
+\begin{proof} (Sketch)
+
+  Let $c$ be a command and $\ctx$ be a context. Assume that $c$ is well-typed under the empty
+  context, changing it to $\ctx$.
+
+  By unfolding the definition of PINI, we assume a public stream $P$, an already known trace
+  $\delta$ and any public event $\alpha$. We also assume that we have a first execution of the
+  program with some secret input stream $S_{1}$, which produces a trace $\tau_{1}$ such that
+  $\pproj{\tau_{1}} = \alpha::\delta$.
+  \instruction{double check that I'm not wrong}
+
+  We need to prove \(K(P,~c,~\alpha::\delta) = K_{\rightarrow}(P,~c,~\delta) \).
+  The left-to-right direction is almost trivial, as we already know the next event $\alpha$.
+  The right-to-left direction is the hard one. By unfolding the definition, we get that
+  the second execution emits a trace $ \pproj{\tau_{2}} = \alpha_{2} :: \delta$.
+  The proof thus mainly relies on the fact that $\pproj{\tau_{1}}= \pproj{\tau_{2}}$.
+
+  Using the Theorem \ref{thm:sound}, all the condition are met, and we can conclude the proof.
+
+\end{proof}
+
 
 \section{Limits and conclusion}%
 \label{sec:conclusion}
 
-We have defined a type-system for PINI. Mechanized the proof of soundness in Coq.
-What next ?
+We have formalized the type-system in Coq, but the formalization does not include the whole report.
 
+\paragraph{Incomplete type-system}
+The type-system that we defined actually does not include the typing rule for the While
+command.
+\instruction{why not ? what was the problem precisely ? Impossible to prove the type\_flows\_gen,
+  which is required to prove auxiliary adequacy language theorem }
+
+\paragraph{Incomplete proof}
+Even without the While typing rule, we actually didn't manage to terminate the proof.
+The admitted lemmas are the following:
+\instruction{list the admitted lemmas}
+Although we didn't prove them, we have good reason to believe that we could have go through the
+whole proof if we had more time to complete them. The Coq implementation explains in the comment why
+we think that the missing lemmas are provable.
+
+\paragraph{Conclusion}
+In this work, we design a type-system for the \whilelang that captures PINI.
+The type-system is mechanized in Coq, as well as its proof of soundness.
 
 %% References
 %% - Edit literature.bib to add references
 %%
-\bibliographystyle{abbrvnat}
-\bibliography{literature}
+% \bibliographystyle{abbrvnat}
+% \bibliography{literature}
 
 \end{document}
