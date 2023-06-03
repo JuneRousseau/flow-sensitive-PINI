@@ -1,0 +1,10 @@
+\begin{figure}[ht]
+  \centering
+
+  \begin{tikzcd}
+    compile(c) \arrow[r, "b*"]                                          & c0' \arrow[r, "bnw"] & c1' \arrow[r, "wb*"] & c2' \arrow[r]          & c3' \arrow[d, "adequacy"]   \\
+    c \arrow[rrrr, "exec"] \arrow[u, "adequacy"] \arrow[d, "adequacy"'] &                      &                      &                        & c'                          \\
+    compile(c) \arrow[rrr, "wb*"']                                      &                      &                      & c2'' \arrow[r, "sb*"'] & c3'' \arrow[u, "adequacy"']
+  \end{tikzcd}
+  \caption{\label{fig:bridge_relation} Bridge relation }
+\end{figure}
