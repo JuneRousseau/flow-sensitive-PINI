@@ -17,6 +17,8 @@
 
 \usepackage{mathpartir}
 \usepackage{pftools}
+\usepackage{stmaryrd}
+
 \usepackage{tikz-cd}
 \usetikzlibrary{cd}
 
@@ -34,6 +36,8 @@
 \newcommand{\exec}[2] { #1 \rightarrow #2 }
 \newcommand{\execn}[3] { #1 \rightarrow^{#2} #3 }
 \newcommand{\bridge}[3] { #1 \curvearrowright_{#2} #3 }
+\newcommand{\whilelang}{\textsc{While Lang} }
+\newcommand{\pproj}[1]{\llbracket #1 \rrbracket_{p}}
 
 \newcommand{\join}[2]{#1 \sqcup #2}
 \newcommand{\joinc}[3][\pc]{#2 \sqcup #3}
@@ -55,89 +59,154 @@
 \begin{document}
 \maketitle
 
-\begin{abstract}
-   Abstract of the project report: what, why PINI ? Type system for enforcement. Soundness.
-\end{abstract}
+% \begin{abstract}
+%    Abstract of the project report: what, why PINI ? Type system for enforcement. Soundness.
+% \end{abstract}
 
 \thispagestyle{empty}
 
 \section{Introduction}
 \label{sec:intro}
-\instruction{ Write introduction }
 
-Threat model: integrity, confidentiality, availability. For confidentiality, in a simple setup: 2
-channels (public and private). We want to make sure that the secret data does not leak, both
-directly (output a data tagged as secret on the public channel) or indirectly (event on the public
-channel that happens in a control-flow depending on a secret input).
-Side-channel such as timing-channel or cache-channel are out of scope.
+In a computer system, the security policies define what kind of properties are desired on the
+system. The main policies are integrity, confidentiality and availability.
+The security mechanisms are the implementation of a specific method to enforce the security policy,
+against a specific threat model, ie.\ the power given to an attacker.
 
-Concept of non-interference, meaning that ``public outputs do not depend on secret inputs''.
+In the case of confidentiality, the system wants some data to be secret. An attacker thus should not
+be able to read, or get any information these data. We consider a simple setup, a programming
+language with I/O primitives, communicating with two kind of I/O channels: public and secret
+channels.
+The security policy that we want to ensure is the confidentiality of the secret inputs. We
+want to make sure that the secret data does not leak. To enforce the confidentiality, we define a
+type-system.
+The threat model is that an attacker can write any program well-typed, and observe the public
+channels. Side-channel such as timing-channel or cache-channel are out of scope.
+
+In our security model, the assurance that the type-system enforce confidentiality is by a formal
+proof. The first step is to formally define what \emph{confidentiality} means. A widely used
+definition of confidentiality is called \emph{non-interference}. In a high-level way,
+non-interference means that ``public outputs do not depend on secret inputs''.
 Non-interference is a 2-hyperproperty, which means that it is a property that depends on 2
 execution traces of the program. The way to prove that public outputs are independent from the
 secret input is to run the same program 2 times, with the same public inputs, but different secret
 input. If we notice a difference on the public output channel, only the secret input are responsible
-(as the public ones are the same), and the not independent.
+(as the public ones are the same in both execution).
 
-Different variant of non-interference: for instance, terminaison sensitive (TSNI), terminaison insensitive
-(TINI).
-Traditionally two way to enforce NI:
+Non-interference (NI) is actually a class of properties for which it exists different variants. For
+instance, we can cite \emph{Termination Sensitive NI} (TSNI) or \emph{Termination Insensitive NI}
+(TINI). The latter allows an adversary to differentiate a secret with the non-termination of the
+program, while the former does not.
+
+There are traditionally two way to enforce non-interference:
 \begin{itemize}
-  \item Monitor, that \emph{dynamically} check the public output channel that it does not leak
-        values tagged as secret.
-  \item Type system, which ensure \emph{statically} that a well-typed program respects NI.
+  \item monitor based: \emph{dynamically} checks that the public output channel does not leak values
+        tagged as secret
+  \item type-system based: \emph{statically} ensures that a well-typed program respects NI
 \end{itemize}
-
 \instruction{ Do we detail more the two approaches ? I don't think that it is necessary }
 
-In this work, we focus in a variant of NI, called Progress-Insensitive-Non-Interference (PINI).
-Interesting because \instruction{ complete }.
-We develop a flow-sensitive type-system that enforce PINI, ie. all well-typed program respects PINI.
-We prove that the type system is sound.
+In this work, we focus in a variant of NI called \emph{Progress-Insensitive Non-Interference}
+(PINI).
+Intuitively, PINI ensures that, if the adversary knows that there will be at least one more public
+event, it cannot gain any knowledge on the secret by learning what this event actually is. PINI is
+interesting, as we can see it as a variant of TINI with intermediate I/O.
+We develop a flow-sensitive type-system that enforce PINI, ie. all well-typed program respects PINI,
+and we prove that the type system is sound.
 
-In the following report, we first introduce the operational semantic of the language in
-Section~\ref{subsec:opsem} that we consider.
-We then formally define our notion of non-interference Section~\ref{subsec:ni}, as well as the type
-system to enforce it Section~\ref{subsec:type_system}.
+In the following report, we first introduce in
+Section~\ref{subsec:opsem} the language that we consider, and its operational semantic.
+We then formally define in Section~\ref{subsec:ni} the notion of Progress-Insensitive
+Non-Interference, and Section~\ref{subsec:type_system} presents the type-system that enforces it.
 Finally, we detail the soundness theorem and its proof in Section~\ref{sec:soundness}.
 
-This work is formalized in the Coq Proof Assistant.
+This work is formalized in the Coq Proof Assistant, available in a
+\href{https://github.com/BastienRousseau/flow-sensitive-PINI}{Github repository}.
+The proof is not complete, we then develop the limits of our implementation and the difficulties
+that we encountered in Section~\ref{sec:conclusion}.
 
-\section{Blabla}
-\label{sec:bla}
-\instruction{ Fill the section }
+\section{Formalization}
+\label{sec:formalization}
+In this section, we formally introduce the \whilelang, the non-interference property and the
+type-system.
 
-\subsection{WHILE language with I/O}%
+\subsection{\whilelang}%
 \label{subsec:opsem}
 
-The language is a simple WHILE language with I/O.
+\whilelang is a simple WHILE language with input and output primitives. Figure~\ref{fig:lang_syntax}
+shows the syntax of the language.
+
+A configuration is a tuple $\conf \triangleq (c,~S,~P,~m,~\tau)$, where $c$ is a command, $S$ and
+$P$ are the stream of respectively the secret and public inputs, $m$ is the memory (a partial map
+from variables to values) and $\tau$ is the trace of events emitted so far.
+For the sake of the presentation, we might use $c$ and $\conf$ interchangeably when it is clear from
+the context.
+
+Figure~\ref{fig:lang_opsem} shows the operational semantic of the language. The operational semantic
+is pretty standard, so we will not \instruction{linger too long on} the explanations.
+
 \instruction{ Figure syntax }
 \instruction{ Figure operational semantic }
 
 \subsection{Non-interference}%
 \label{subsec:ni}
 
-Non-interference: ``public outputs do not depend on secret inputs''.
-Knowledge of the attacker: what does an attacker learn from a public event.
-Given a public trace, public input and program, the attacker knowledge is the set of secret inputs
-that the attacker that are consistent with the trace of execution.
+The mantra of non-interference is that ``public outputs do not depend on secret inputs''.
+We will define formally this concept using the notion of \emph{attacker knowledge}. The attacker
+knowledge is the ability for an adversary to deduce the possible secret inputs. It defines what can
+an attacker learn by looking at the public outputs.
+More precisely, the attacker knowledge is the set of secret inputs that are consistent with the
+public execution trace. Thus, smaller is the set of possible inputs, bigger is the attacker
+knowledge.
 
-Progress-sensitive: public events does not give more knowledge to the attacker. In other words,
-at any step, the knowledge of the attacker is the same (it cannot narrow down the set of possible
-secret input).
+Formally, the attacker knowledge $K$ is defined by
+\[
+  K(P,~c,~\delta) \triangleq
+  \{ S ~|~ \exists \conf'.\
+  \exec{(c,~S,~P,~m_{\mathrm{init}},~\varepsilon)}{\conf'}
+  \wedge
+  \pproj{\tau'} = \delta
+  \}
+\]
+where $\pproj{\tau}$ is the projection of the public events of the trace $\tau$.
 
-Intuition ? Might be hard to enforce (why ?).
+Using this base definition, we can define a variant of NI called \emph{Progress Sensitive
+  Non-Interference} (PSNI).
+\[
+  \mathrm{PSNI} \triangleq
+  \forall P,c,\delta,\alpha. \ K(P,~c,~\alpha::\delta) = K(P,~c,~\delta)
+\]
+The intuition is that, if the adversary has already discover the public trace $\delta$ by the
+execution, discovering a new public event $\alpha$ does not provide more knowledge.
+In other words, at any step of computation, the knowledge of the attacker is the same, and it cannot
+narrow down the set of possible secret inputs.
+However, PSNI is hard to enforce. \instruction{why ? because we need to know whether there will be a
+  future event}
 
-Because PSNI is hard to enforce, we define Progress-Insensitive (PINI).
-
-Progress-knowledge:
-Given a public trace, public input and program, the attacker knowledge is the set of secret inputs
-that the attacker that are consistent with the trace of execution, if learning one more public
-event.
-Progress-insensitive: the attacker does not learn more by knowing the next public event.
-
-Intuition ? Why easier to enforce ?
-The attacker already knows in advance that there will be another event, but it doesn't know which
-one precisely. Knowing what the event is exactly does not give more knowledge.
+Because PSNI is hard to enforce, we define the \emph{Progress Insensitive Non-Interference} (PINI)
+variant. Intuitively, we allow the adversary to know that there will be a future public event, but
+when it indeed learn the exact event, it does change its knowledge. In order to formally define this
+intuition, we first define the notion of \emph{progress knowledge} $K_{\rightarrow}$, which is a
+variant of the attacker knowledge \instruction{with an additional (any) public event}.
+\[
+  K_{\rightarrow}(P,~c,~\delta) \triangleq
+  \{ S ~|~ \exists \conf',\alpha.\
+  \exec{(c,~S,~P,~m_{\mathrm{init}},~\varepsilon)}{\conf'}
+  \wedge
+  \pproj{\tau'} = \alpha::\delta
+  \}
+\]
+The progress knowledge captures the set of secret input that are consistent with the execution $c$,
+the already known public trace $\delta$ and any additional public event $\alpha$.
+We can thus formally define PINI:
+\[
+  \mathrm{PINI} \triangleq
+  \forall P,c,\delta,\alpha. \ K(P,~c,~\alpha::\delta) = K_{\rightarrow}(P,~c,~\delta)
+\]
+which indeed capture the fact that learning an additional event does not give more knowledge than
+knowing that a public event will arrive.
+PINI is easier to enforce than PSNI, because the attacker already knows in advance that there will
+be another event, but it doesn't know which one precisely.
 
 \subsection{Type system}%
 \label{subsec:type_system}
@@ -324,25 +393,26 @@ c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
 
 \instruction{ bridge relation defined on the auxiliary language }
 
-Basic bridge relation (in the Coq development, named \emph{bridge})
-: two states basic-bridge in n steps, if they take n-1 steps without emitting any public
-event, and then take any public event.
+We define multiple kind of bridge relations, that relates two states in different ways:
 
-Write-bridge relation (in the Coq development, named \emph{write-bridge})
-: two states write-bridge in n steps, if they take n-1 steps without emitting
-any public event, and then take a write public event.
+\begin{itemize}
+  \item Basic-bridge relation (\emph{basic\_bridge} in the Coq development):
+        two states basic-bridge in n steps, if they take n-1 steps without emitting any public
+        event, and then take any public event.
+  \item Write-bridge relation (\emph{write\_bridge} in the Coq development):
+        two states write-bridge in n steps, if they take n-1 steps without emitting any public
+        event, and then take a write public event.
+  \item Silent-bridge relation (\emph{silent\_bridge} in the Coq development):
+        two states silent-bridge in n steps, if they take n steps without emitting
+\end{itemize}
 
-Silent-bridge relation (in the Coq development, named \emph{silent-bridge})
-: two states silent-bridge in n steps, if they take n steps without emitting
-any public event.
+We define the transitive closure for the write-bridge relation. One may notice that it cannot be
+reflexive, as it imposes at least one step emitting a write event.
 
-We define the transitive closure for the different bridge relations. In particular, basic-bridge and
-write-bridge are not reflexive, as they impose at least one step emitting a public event.
-
-The bridge relation (in the Coq development, named \emph{full-bridges}) is our main relation. There
+The bridge relation (in the Coq development, named \emph{bridge}) is our main relation. There
 is two different ways for two states to bridge: first,
-the starting state takes any number of basic-bridge, then it takes one basic-bridge that do not emit
-a write-event, then any number of write-bridge, and finally any number of silent-bridges ; the second
+the starting state takes any number of basic-bridges, then it takes one basic-bridge that do not emit
+a write-event, then any number of write-bridge, and finally any number of silent-bridges; the second
 way is to take any number of write-bridge, and then any number of silent-bridges.
 
 Figure~\ref{fig:bridge_relation} shows these two different ways to bridge, where $b$ stands for
@@ -412,6 +482,8 @@ same length, the final command is the same, the final memory agree on publics, a
 public traces are the same for both execution.
 It holds because \instruction{fill in}.
 
+\instruction{overview of the proofs ? especially why/where do we need the previous lemmas ? }
+
 \subsection{Main theorem}%
 \label{subsec:main_theorem}
 
@@ -424,7 +496,7 @@ It holds because \instruction{fill in}.
 
 Composition of the lemma that leads to the soundness theorem.
 
-\section{Conclusion}%
+\section{Limits and conclusion}%
 \label{sec:conclusion}
 
 We have defined a type-system for PINI. Mechanized the proof of soundness in Coq.
