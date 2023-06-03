@@ -31,6 +31,9 @@
 \newcommand{\typingaux}[5]{ #1,~#2 \vdash #3 \rightsquigarrow #4,~#5}
 \newcommand{\execaux}[7] { (#1,~#2,~#3) \xrightarrow{#4} (#5,~#6,~#7) }
 % (config, Γ, lpc) - ev -> (config_f, Γf, lpcf)
+\newcommand{\exec}[2] { #1 \rightarrow #2 }
+\newcommand{\execn}[3] { #1 \rightarrow^{#2} #3 }
+\newcommand{\bridge}[3] { #1 \curvearrowright_{#2} #3 }
 
 \newcommand{\join}[2]{#1 \sqcup #2}
 \newcommand{\joinc}[3][\pc]{#2 \sqcup #3}
@@ -316,37 +319,69 @@ c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
 
 \instruction{transition}
 
-\subsection{Bridge relation}%
+\subsection{Bridge relations}%
 \label{subsec:brigde_rel}
 
-Bridge relation : two states bridge in n steps, if they take n-1 steps without emitting any public
-event, and then take a non-write public event.
+\instruction{ bridge relation defined on the auxiliary language }
 
-Write-bridge relation : two states write-bridge in n steps, if they take n-1 steps without emitting
+Basic bridge relation (in the Coq development, named \emph{bridge})
+: two states basic-bridge in n steps, if they take n-1 steps without emitting any public
+event, and then take any public event.
+
+Write-bridge relation (in the Coq development, named \emph{write-bridge})
+: two states write-bridge in n steps, if they take n-1 steps without emitting
 any public event, and then take a write public event.
 
-Silent-bridge relation : two states silent-bridge in n steps, if they take n steps without emitting
+Silent-bridge relation (in the Coq development, named \emph{silent-bridge})
+: two states silent-bridge in n steps, if they take n steps without emitting
 any public event.
 
-We define the transitive closure for the bridge relations. In particular, bridge and write-bridge
-are not reflexive, as they impose at least one step emitting a public event.
+We define the transitive closure for the different bridge relations. In particular, basic-bridge and
+write-bridge are not reflexive, as they impose at least one step emitting a public event.
 
-\instruction{motivation for this bunch of relations ?}
+The bridge relation (in the Coq development, named \emph{full-bridges}) is our main relation. There
+is two different ways for two states to bridge: first,
+the starting state takes any number of basic-bridge, then it takes one basic-bridge that do not emit
+a write-event, then any number of write-bridge, and finally any number of silent-bridges ; the second
+way is to take any number of write-bridge, and then any number of silent-bridges.
 
-% TODO rename adequacy
-\input{figures/bridge_agree.tex}
+Figure~\ref{fig:bridge_relation} shows these two different ways to bridge, where $b$ stands for
+basic-bridge, $bnw$ for basic-bridge non-write, $wb$ for write-bridge and $sb$ for silent-bridge.
+The adequacy allows one to move from the original language to the auxiliary one, and the other way around.
 
-We can derive two main theorems
+% Motivation for all the relations
+The different bridge relations allows us to decompose any pack of steps by the kind of events, and
+to know precisely what is synchronized or not each time.
+\instruction{a bit more motivations: the first path actually change the trace, while the 2nd one not
+really, as it only perform public writes}
+
+We can derive two main theorems: an adequacy theorem and an agreement theorem.
 \begin{theorem}[Bridge adequacy]
-  If c typecheck,
-  m well-formed memory,
-  c takes n steps
+  Let $\conf \triangleq (c,~S,~P,~\tau)$ and $\conf' \triangleq (c',~S',~P',~\tau')$ be two
+  configurations of the original language, an initial and final contexts $\ctx$ and $\ctx'$, and an
+  initial pc $\pc$.
+  Let further suppose that
 
-  then, it exists a relation in the bridge figure, and the public events
-  emitted by the steps are the same as the trace emitted by the bridge (by erasing the writes)
+ \begin{itemize}
+   \item $m$ be a well-formed memory wrt. $\ctx$,
+   \item \(\typing{\ctx}{\pc}{c}{\ctx'} \)
+   \item \( \execn{\conf}{n}{\conf'} \)
+ \end{itemize}
 
+  Then, it exists $j$ and $\tau_{f}$ \( \bridge{c}{\tau}{j} \) such that $c' = compile(j)$ and $\tau_{f} \setminus \mathrm{Write} = \tau'$.
 \end{theorem}
 
+\instruction{I'm not happy with this explanation, find a better formulation}
+In other words, the \emph{bridge adequacy} theorem states that if a command is well-type, and takes
+any number of steps, then its auxiliary counterpart bridges to a state that is the compilation of
+the final state and that record exactly the public trace.
+
+This theorem then allows to reason on the bridge relation rather than on the operational semantic.
+\instruction{Why is it good ? Because the bridge relation decompose the steps by looking only at the
+  emitted public events, and give more information about what part is synchronized or not}
+Figure~\ref{fig:bridge_relation} shows draws the adequacy.
+
+\input{figures/bridge_relation.tex}
 
 
 \begin{theorem}[Bridge agree]
@@ -357,12 +392,25 @@ We can derive two main theorems
   the same.
 \end{theorem}
 
-It corresponds to the first transition on top of Figure~\ref{fig:bridge_agree}.
+\instruction{Where is defined memory agree on public ? }
 
-Two other lemmas capturing that write-bridge and silent-bridge emit the same trace (but they don't
-have to agree on memory anymore)
+The theorem is split in 3 lemmas: basic-bridge, write-bridge and silent-bridge agree.
 
+Silent-bridge agree states that in-between two silent bridge of two executions,
+the memory agree on public, public input are the same and the public
+traces are the same for both execution. It holds because silent-bridge relates states that do not
+emit any public events: the traces don't change, and the public part of the memory don't change
+either.
 
+Write-bridge agree states that in-between two write-bridges of two executions,
+the public traces are the same for both execution. It holds because write-bridge relates states that
+do not emit only write-events, which means that memories might not agree on the public anymore, but
+they do not emit any visible events in the trace.
+
+Basic-bridge is the main lemma: it states that in-between two basic-bridges of two executions of
+same length, the final command is the same, the final memory agree on publics, and
+public traces are the same for both execution.
+It holds because \instruction{fill in}.
 
 \subsection{Main theorem}%
 \label{subsec:main_theorem}
