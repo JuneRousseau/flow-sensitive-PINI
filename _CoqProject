@@ -4,7 +4,9 @@ theories/map_simpl.v
 theories/lang.v
 theories/types.v
 theories/security.v
+theories/properties.v
 theories/augmented.v
+theories/bridges.v
 theories/soundness.v
 
-theories/examples.v
+# theories/examples.v

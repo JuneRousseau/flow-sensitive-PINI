@@ -211,3 +211,16 @@ Inductive typecheck : context -> confidentiality -> command -> context -> Prop :
   -{ Γ, pc ⊢ (COutput ch e) ~> Γ' }-
 where "-{ Γ ',' pc '⊢' e '~>' Γ2 }-" := (typecheck Γ pc e Γ2)
 .
+
+
+(** Properties *)
+Lemma expr_type_unique Γ e l1 l2:
+  {{ Γ ⊢ e : l1 }} -> {{ Γ ⊢ e : l2 }} -> l1 = l2.
+Proof.
+  intros He1 He2.
+  generalize dependent l1. generalize dependent l2.
+  induction e; intros; inversion He1; inversion He2; subst => //.
+  - rewrite H1 in H5. by inversion H5.
+  - rewrite (IHe1 ℓ0 H11 ℓ1 H4).
+    rewrite (IHe2 ℓ3 H12 ℓ2 H5). done.
+Qed.
