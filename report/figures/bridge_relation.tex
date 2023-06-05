@@ -2,9 +2,19 @@
   \centering
 
   \begin{tikzcd}
-    compile(c) \arrow[r, "b*"]                                          & c0' \arrow[r, "bnw"] & c1' \arrow[r, "wb*"] & c2' \arrow[r, "sb"]          & c3' \arrow[d, "adequacy"]   \\
-    c \arrow[rrrr, "exec"] \arrow[u, "adequacy"] \arrow[d, "adequacy"'] &                      &                      &                        & c'                          \\
-    compile(c) \arrow[rrr, "wb*"']                                      &                      &                      & c2'' \arrow[r, "sb"'] & c3'' \arrow[u, "adequacy"']
+    (\compile{c}) \arrow[r, "\mathrm{b*}"]
+    & j_{0}' \arrow[r, "\mathrm{bnw}"]
+    & j_{1}' \arrow[r, "\mathrm{wb*}"]
+    & j_{2}' \arrow[r, "\mathrm{sb}"]
+    & j_{3}' \arrow[d, "\mathrm{adequacy}"]
+    \\
+    c \arrow[rrrr, "\mathrm{exec}"]
+    \arrow[u, "\mathrm{adequacy}"] \arrow[d, "\mathrm{adequacy}"']
+    & & & & c'
+    \\
+    (\compile{c}) \arrow[rrr, "\mathrm{wb*}"']
+    & & & j_{2}'' \arrow[r, "\mathrm{sb}"']
+    & j_{3}'' \arrow[u, "\mathrm{adequacy}"']
   \end{tikzcd}
   \caption{\label{fig:bridge_relation} Bridge relation }
 \end{figure}

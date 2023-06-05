@@ -42,6 +42,7 @@
 \newcommand{\whilelang}{\textsc{While Lang} }
 \newcommand{\pproj}[1]{\llbracket #1 \rrbracket_{p}}
 \newcommand{\agree}[3]{#2 \sim_{#1} #3}
+\newcommand{\compile}[1]{ #1 \downarrow }
 
 \newcommand{\join}[2]{#1 \sqcup #2}
 \newcommand{\joinc}[3][\pc]{#2 \sqcup #3}
@@ -249,6 +250,15 @@ level \( \pc \), command \( c \) is safe to execute and after execution, the con
 The soundness theorem states that the type system actually enforce PINI. In other words, it
 formally states that any well-typed program is PINI.
 
+But first, let us define two notions that link memories and context.
+
+We say that a memory $m$ is well-formed wrt. a context $\ctx$, if all the variables defined in $m$
+are also defined in $\ctx$, ie. $\forall x \in m \Rightarrow x \in \ctx$.
+
+We say that a two memories $m_{1}$ and $m_{2}$ agree on the public variables wrt. a context $\ctx$,
+if all the variables defined as public in $\ctx$ are the same in $m_{1}$ and $m_{2}$. We note
+$\agree{\ctx}{m_{1}}{m_{2}}$.
+
 \subsection{Approach}%
 \label{subsec:approach}
 
@@ -333,7 +343,6 @@ The auxiliary language and type-system enjoy some interesting properties.
 The preservation lemma states that if a well-typed term takes a step, then the resulting term is
 well-typed, under the (potentially) new typing context.
 
-\instruction{DEFINE WELL-FORMED MEMORY BEFORE HERE}
 
 \begin{lemma}[Preservation]
   Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
@@ -354,6 +363,8 @@ In order to establishes an equivalence between the original language and the aux
 define a transformation from the auxiliary language to the original language, which consists on
 erasing the join command; and a transformation from the original language to the original language,
 which consists on adding the join command after every if-then-else.
+We denote the transformation from a command $c$ in \whilelang to the auxiliary language
+$\compile{c}$.
 
 The equivalence between the two languages are reflected via the two following adequacy theorems:
 
@@ -395,7 +406,7 @@ step in the auxiliary language.
 
 In the following diagram, the adequacy lemma states that $j'$ is the compilation of $c'$:
 \begin{tikzcd}
-compile(c) \arrow[r]  & j'                   \\
+\compile(c) \arrow[r]  & j'                   \\
 c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
 \end{tikzcd}
 
@@ -455,7 +466,7 @@ We can derive two main theorems: an adequacy theorem and an agreement theorem.
    \item \( \execn{\conf}{n}{\conf'} \)
  \end{itemize}
 
-  Then, it exists $j$ and $\tau_{f}$ \( \bridge{c}{\tau}{j} \) such that $c' = compile(j)$ and $\tau_{f} \setminus \mathrm{Write} = \tau'$.
+  Then, it exists $j$ and $\tau_{f}$ \( \bridge{c}{\tau}{j} \) such that $c' = \compile{j}$ and $\tau_{f} \setminus \mathrm{Write} = \tau'$.
 \end{theorem}
 
 \instruction{I'm not happy with this explanation, find a better formulation}
@@ -471,7 +482,6 @@ Figure~\ref{fig:bridge_relation} shows draws the adequacy.
 \input{figures/bridge_relation.tex}
 
 
-\instruction{TODO DEFINE AGREE ON PUBLIC BEFORE}
 \begin{theorem}[Bridge agree]\label{thm:agree}
 
   Assume
