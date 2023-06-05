@@ -64,13 +64,13 @@ Proof. intros x y z. destruct x, y,z => //. Defined.
 Definition context := gmap var confidentiality.
 Definition empty_context : context := gmap_empty.
 
-(* We say that a memory is well-formed w.r.t a context if all they define the
-   same variables *)
-(* TODO actually, we can just require dom(m) ⊆ dom(m) *)
+(* We say that a memory m is well-formed w.r.t a context Γ
+   if all the variables defined in m are also defined in Γ *)
 Definition wf_memory (m : memory) (Γ : context) : Prop :=
   forall x, match m !! x, Γ !! x with
        | Some _, Some _
-       | None, None => True
+       | None, None
+       | None, Some _ => True
        | _, _ => False
        end.
 
@@ -114,11 +114,59 @@ Proof.
   by rewrite Heq.
 Qed.
 
+Lemma join_context_some_flows:
+  ∀ (Γ Γ' : context) (x : var) l,
+  Γ !! x = Some l →
+  exists l', l ⊑ l' /\ (Γ ⊔g Γ') !! x = Some l'.
+Proof.
+  intros  Γ Γ' x ℓ HΓ.
+  destruct (Γ' !! x) eqn:HΓ'.
+  destruct ℓ,c.
+  all:
+    try (exists LSecret; split => //; by rewrite lookup_merge; rewrite HΓ HΓ'; cbn).
+  + exists LPublic; split => //.
+    by rewrite lookup_merge; rewrite HΓ HΓ'; cbn.
+  + exists ℓ; split => //.
+    by rewrite lookup_merge; rewrite HΓ HΓ'; cbn.
+Qed.
+
+Lemma join_empty_r Γ : (Γ ⊔g ∅) = Γ.
+Proof.
+  induction Γ using map_ind.
+  - by apply merge_empty.
+  - unfold join_context.
+    erewrite <- insert_merge_l; cbn.
+    + rewrite (_: (merge
+       (λ opt1 opt2 : option confidentiality,
+          match opt1 with
+          | Some l1 => match opt2 with
+                       | Some l2 => Some (l1 ⊔ l2)
+                       | None => opt1
+                       end
+          | None => opt2
+          end) m ∅) =  m ⊔g ∅) ; first by (unfold join_context).
+    by rewrite IHΓ.
+    + by rewrite lookup_empty.
+Qed.
+
 Lemma flows_context_join Γ Γ' : Γ ⊑g (Γ ⊔g Γ').
 Proof.
   intros x.
   destruct (Γ !! x) eqn:Hx => //;
   destruct ((Γ ⊔g Γ') !! x) eqn:Hx' => //.
+  destruct c, c0 => //.
+  - eapply join_context_some_flows in Hx.
+    destruct Hx as [l' [Hl' HΓ]].
+    erewrite Hx' in HΓ. injection HΓ ; intros ; subst ; auto.
+
+  - eapply join_context_some_flows in Hx.
+    destruct Hx as [l' [Hl' HΓ]].
+    erewrite Hx' in HΓ. discriminate.
+
+  - induction Γ' using map_ind.
+    + by rewrite join_empty_r Hx in Hx'.
+    + apply IHΓ'.
+      unfold join_context in Hx'.
 Admitted.
 
 (* Lemma flows_context_refl Γ : Γ ⊑g Γ. *)
@@ -211,3 +259,16 @@ Inductive typecheck : context -> confidentiality -> command -> context -> Prop :
   -{ Γ, pc ⊢ (COutput ch e) ~> Γ' }-
 where "-{ Γ ',' pc '⊢' e '~>' Γ2 }-" := (typecheck Γ pc e Γ2)
 .
+
+
+(** Properties *)
+Lemma expr_type_unique Γ e l1 l2:
+  {{ Γ ⊢ e : l1 }} -> {{ Γ ⊢ e : l2 }} -> l1 = l2.
+Proof.
+  intros He1 He2.
+  generalize dependent l1. generalize dependent l2.
+  induction e; intros; inversion He1; inversion He2; subst => //.
+  - rewrite H1 in H5. by inversion H5.
+  - rewrite (IHe1 ℓ0 H11 ℓ1 H4).
+    rewrite (IHe2 ℓ3 H12 ℓ2 H5). done.
+Qed.

@@ -8,6 +8,7 @@ From fspini Require Import
   lang
   types
   security
+  properties
   map_simpl.
 
 
@@ -18,6 +19,14 @@ Inductive public_event :=
 | BecameSecret : var -> public_event
 .
 
+Fixpoint trace_of_public_trace evs :=
+  match evs with
+  | [] => []
+  | Input v :: evs => EvInput Public v :: trace_of_public_trace evs
+  | Output v :: evs => EvOutput Public v :: trace_of_public_trace evs
+  | _ :: evs => trace_of_public_trace evs
+  end.
+
 Inductive jcommand :=
 | JSkip : jcommand
 | JAssign : var -> expr -> jcommand
@@ -26,18 +35,10 @@ Inductive jcommand :=
 | JWhile : expr -> jcommand -> jcommand
 | JInput : channel -> var -> jcommand
 | JOutput : channel -> expr -> jcommand
-| JThenJoin : jcommand -> jcommand 
+| JThenJoin : jcommand -> jcommand
 .
 
-
-(* Fixpoint level j :=
-  match j with
-  | JSkip | JAssign _ => 0
-  |  *)
-
-
-
-
+(* Compile a command into a jcommand *)
 Fixpoint jcommand_of_command c :=
   match c with
   | CSkip => JSkip
@@ -50,6 +51,7 @@ Fixpoint jcommand_of_command c :=
   | COutput c e => JOutput c e
   end.
 
+(* Decompile a jcommand into a command *)
 Fixpoint command_of_jcommand j :=
   match j with
   | JSkip => CSkip
@@ -255,7 +257,7 @@ Inductive jtypecheck : context -> list confidentiality -> jcommand -> context ->
 .
 
 
-(* Attempt at defining a statement that intertwines execution and typechecking *)
+(* Operationnal semanctic of the jcommand *)
 Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option public_event -> jconfig -> context -> list confidentiality -> Prop :=
 | GSkip : forall S P m t Γ ls,
   exec_with_gamma
@@ -265,6 +267,7 @@ Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option
 
 | GAssign : forall S P m t ev x e v l Γ ls Γ',
   e ; m ⇓ v ->
+
   {{ Γ ⊢ e : l }} ->
   Γ' = <[ x := fold_left join ls l ]> Γ ->
   ev = match l with
@@ -278,22 +281,22 @@ Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option
     ( None, S, P, <[ x := v ]> m, t) Γ' ls
 
 | GSeq1 : forall S P m t c1 c2 Γ ls S' P' m' t' c1' Γ' ls' ev,
-    exec_with_gamma
-      ( Some c1, S, P, m, t) Γ ls
-      ev
-      ( Some c1', S', P', m', t') Γ' ls'
-    ->
+  exec_with_gamma
+    ( Some c1, S, P, m, t) Γ ls
+    ev
+    ( Some c1', S', P', m', t') Γ' ls'
+  ->
     exec_with_gamma
       ( Some (JSeq c1 c2), S, P, m, t ) Γ ls
       ev
       ( Some (JSeq c1' c2), S', P', m', t' ) Γ' ls'
 
 | GSeq2 : forall S P m t c1 c2 Γ ls ls' S' P' m' t' Γ' ev,
-    exec_with_gamma
-      ( Some c1, S, P, m , t ) Γ ls
-      ev
-      ( None, S', P', m', t' ) Γ' ls'
-    ->
+  exec_with_gamma
+    ( Some c1, S, P, m , t ) Γ ls
+    ev
+    ( None, S', P', m', t' ) Γ' ls'
+  ->
     exec_with_gamma
       ( Some (JSeq c1 c2), S, P, m, t ) Γ ls
       ev
@@ -301,216 +304,445 @@ Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option
 
 | GIf : forall S P m t (c1 c2 : jcommand) e v l Γ ls,
   e ; m ⇓ v ->
-  {{ Γ ⊢ e : l }} ->
-  exec_with_gamma
-    ( Some (JIfThenElse e c1 c2), S, P, m, t ) Γ ls
-    None
-    ( Some ((* JThenJoin  *) (if Nat.eqb v 0 then c2 else c1)), S, P, m, t ) Γ (l :: ls)
+      {{ Γ ⊢ e : l }} ->
+      exec_with_gamma
+        ( Some (JIfThenElse e c1 c2), S, P, m, t ) Γ ls
+        None
+        ( Some ((* JThenJoin  *) (if Nat.eqb v 0 then c2 else c1)), S, P, m, t ) Γ (l :: ls)
 
 | GJoin1 : forall j S P m t Γ pc j' S' P' m' t' Γ' pc' alpha,
-    exec_with_gamma
-      ( Some j, S, P, m, t ) Γ pc
-      alpha
-      ( Some j', S', P', m', t') Γ' pc' ->
-    exec_with_gamma
-      ( Some (JThenJoin j), S, P, m, t) Γ pc
-      alpha
-      ( Some (JThenJoin j'), S', P', m', t') Γ' pc'
+  exec_with_gamma
+    ( Some j, S, P, m, t ) Γ pc
+    alpha
+    ( Some j', S', P', m', t') Γ' pc' ->
+  exec_with_gamma
+    ( Some (JThenJoin j), S, P, m, t) Γ pc
+    alpha
+    ( Some (JThenJoin j'), S', P', m', t') Γ' pc'
 
 | GJoin2 : forall j S P m t Γ pc S' P' m' t' Γ' l pc' alpha,
-    exec_with_gamma
-      ( Some j, S, P, m, t ) Γ pc
-      alpha
-      ( None, S', P', m', t' ) Γ' (l :: pc') ->
-    exec_with_gamma
-      ( Some (JThenJoin j), S, P, m, t ) Γ pc
-      alpha
-      ( None, S', P', m', t') Γ' pc'
-(*    
-| GJoin : forall S P m t Γ l ls c,
-    exec_with_gamma
-      ( Some (JThenJoin c), S, P, m, t ) Γ (l :: ls)
-      None
-      ( Some (jcommand_of_command c), S, P, m, t ) Γ ls *)
+  exec_with_gamma
+    ( Some j, S, P, m, t ) Γ pc
+    alpha
+    ( None, S', P', m', t' ) Γ' (l :: pc') ->
+  exec_with_gamma
+    ( Some (JThenJoin j), S, P, m, t ) Γ pc
+    alpha
+    ( None, S', P', m', t') Γ' pc'
 
 | GWhile : forall S P m t c e Γ ls,
-    exec_with_gamma
-      ( Some (JWhile e c), S, P, m, t ) Γ ls
-      None
-      ( Some (JIfThenElse e (JSeq c (JWhile e c)) JSkip), S, P, m, t ) Γ ls
+  exec_with_gamma
+    ( Some (JWhile e c), S, P, m, t ) Γ ls
+    None
+    ( Some (JIfThenElse e (JSeq c (JWhile e c)) JSkip), S, P, m, t ) Γ ls
 
 | GInputPublic : forall S P m t x v Γ ls Γ',
-    Γ' = <[ x := fold_left join ls LPublic ]> Γ ->
-    exec_with_gamma
-      ( Some (JInput Public x), S, v::::P, m, t ) Γ ls
-      ( Some (Input v))
-      ( None, S, P, <[x := v ]> m, EvInput Public v :: t ) Γ' ls
+  Γ' = <[ x := fold_left join ls LPublic ]> Γ ->
+  exec_with_gamma
+    ( Some (JInput Public x), S, v::::P, m, t ) Γ ls
+    ( Some (Input v))
+    ( None, S, P, <[x := v ]> m, EvInput Public v :: t ) Γ' ls
 
-| GInputSecret : forall S P m t x v Γ ls Γ',
+| GInputSecret : forall S P m t x v Γ ls Γ' ev,
     Γ' = <[ x := LSecret ]> Γ ->
-    exec_with_gamma
-      ( Some (JInput Secret x), v::::S, P, m, t ) Γ ls
-      None 
-      ( None, S, P, <[x := v ]> m, EvInput Secret v :: t ) Γ' ls
+    ev = match Γ !! x with
+         | Some LPublic => Some (BecameSecret x)
+         | _ => None end ->
+  exec_with_gamma
+    ( Some (JInput Secret x), v::::S, P, m, t ) Γ ls
+    ev
+    ( None, S, P, <[x := v ]> m, EvInput Secret v :: t ) Γ' ls
 
 | GOutput : forall S P m t ch e v Γ ls ev l,
-    e ; m ⇓ v ->
-        {{ Γ ⊢ e : l }} ->
-        (fold_left join ls l) ⊑ confidentiality_of_channel ch ->
-        ev = match ch with Public => Some (Output v) | Secret => None end -> 
+  e ; m ⇓ v ->
+      {{ Γ ⊢ e : l }} ->
+      (fold_left join ls l) ⊑ confidentiality_of_channel ch ->
+      ev = match ch with Public => Some (Output v) | Secret => None end ->
+      exec_with_gamma
+        ( Some (JOutput ch e), S, P, m, t ) Γ ls
+        ev
+        ( None, S, P, m, EvOutput ch v :: t) Γ ls
+.
+
+(* The trace only grows along the reduction in the opsem *)
+Lemma trace_monotone_with_gamma :
+  forall c S P m t c' S' P' m' t' Γ pc ev Γ' pc',
+  exec_with_gamma (c, S, P, m, t) Γ pc ev (c', S', P', m', t') Γ' pc' ->
+  exists nw, t' = app nw t.
+Proof.
+  destruct c as [c|].
+  - induction c; intros * Hstep; inversion Hstep; subst
+    ; try (eexists []; reflexivity).
+    + eapply IHc1; eassumption.
+    + eapply IHc1; eassumption.
+    + exists ( [EvInput Public v] ) ; reflexivity.
+    + exists ( [EvInput Secret v] ) ; reflexivity.
+    + exists ( [EvOutput c v] ) ; reflexivity.
+    + eapply IHc; eassumption.
+    + eapply IHc; eassumption.
+  - inversion 1.
+Qed.
+
+(* States precisely how the public projection grows when a public event
+   is emitted by the execution step *)
+Lemma exec_grow_trace j S P m t Γ pc ev j' S' P' m' t' Γ' pc':
+  exec_with_gamma (j, S, P, m, t) Γ pc ev (j', S', P', m', t') Γ' pc' ->
+  (⟦ t' ⟧p) = match ev with
+              | Some (Input v) => EvInput Public v :: (⟦ t ⟧p)
+              | Some (Output v) => EvOutput Public v :: (⟦ t ⟧p)
+              | _ => (⟦ t ⟧p) end.
+Proof.
+  intros Hexec.
+  destruct j; last by inversion Hexec.
+  generalize dependent S; generalize dependent P;
+    generalize dependent m; generalize dependent t; generalize dependent Γ;
+    generalize dependent pc; generalize dependent j'; generalize dependent pc'.
+  induction j; intros; inversion Hexec; subst => //.
+  - destruct l => //. destruct (Γ !! s) => //. destruct c => //.
+  - by eapply IHj1.
+  - by eapply IHj1.
+  - destruct (Γ !! s) => //. destruct c => //.
+  - destruct c => //.
+  - by eapply IHj.
+  - by eapply IHj.
+Qed.
+
+
+(* If an execution of one step does not emit any public input/output,
+   then the public projection of the trace does not change *)
+Lemma exec_with_gamma_no_event j S P m t Γ pc j' S' P' m' t' Γ' pc' ev:
+  match ev with | None | Some (WritePublic _ _) | Some (BecameSecret _) => True | _ => False end ->
+  exec_with_gamma (j, S, P, m, t) Γ pc ev (j', S', P', m', t') Γ' pc' ->
+  (⟦ t ⟧p) = (⟦ t' ⟧p).
+Proof.
+  intros Hev Hexec.
+  destruct j; last by inversion Hexec.
+  generalize dependent j'; generalize dependent S'; generalize dependent P';
+    generalize dependent m'; generalize dependent t'; generalize dependent Γ';
+    generalize dependent pc'.
+  induction j; intros; inversion Hexec ; subst => //.
+  - by eapply IHj1.
+  - by eapply IHj1.
+  - destruct c => //.
+  - by eapply IHj.
+  - by eapply IHj.
+Qed.
+
+(* If an execution step does no emit ANY public event, then
+   public input stream does not change,
+   the memories before and after agree on public,
+   and the public projections does not change *)
+Lemma exec_with_gamma_event_none j S P m t Γ pc j' S' P' m' t' Γ' pc':
+(*  wf_memory m Γ -> *)
+  exec_with_gamma (j, S, P, m, t) Γ pc None (j', S', P', m', t') Γ' pc' ->
+  context_agree Γ Γ' /\ P = P' /\ agree_on_public Γ' m m' /\ (⟦ t ⟧p) = (⟦ t' ⟧p).
+Proof.
+  intros (* Hm *) Hexec.
+  destruct j; last by inversion Hexec.
+  generalize dependent j'; generalize dependent S'; generalize dependent P';
+    generalize dependent m'; generalize dependent t'; generalize dependent Γ';
+    generalize dependent pc'.
+  induction j; intros; inversion Hexec ; subst => //.
+  all: try by repeat split => //; try apply agree_refl.
+  - destruct l => //. destruct (Γ !! s) eqn:Hs => //.
+    + destruct c => //.
+      repeat split => //. 
+      rewrite fold_secret insert_id => //.
+      apply agree_update_secret => //.
+      rewrite lookup_insert. rewrite fold_secret. done.
+(*      rewrite fold_secret. by apply wf_update_secret. *)
+    + repeat split => //. rewrite fold_secret. by apply context_agree_add_secret.
+      apply agree_update_secret => //.
+      rewrite lookup_insert. rewrite fold_secret => //.
+      (* rewrite fold_secret. by apply wf_update_secret. *)
+  - by eapply IHj1.
+  - by eapply IHj1.
+  - destruct (Γ !! s) eqn:Hs => //.
+    + destruct c => //. repeat split => //.
+      rewrite insert_id => //. apply agree_update_secret => //.
+      rewrite lookup_insert => //. (* by apply wf_update_secret. *)
+    + repeat split => //. apply context_agree_add_secret => //.
+      apply agree_update_secret => //.
+      by rewrite lookup_insert. (* by apply wf_update_secret. *)
+  - destruct c => //. repeat split => //. by apply agree_refl.
+  - by eapply IHj.
+  - by eapply IHj.
+Qed.
+
+
+
+
+
+(** Properties on the type system *)
+Lemma jtyping_pc_flows Γ0 pc0 c Γf pcf:
+  jtypecheck Γ0 pc0 (jcommand_of_command c) Γf pcf ->
+  flows_pc pc0 pcf.
+Proof.
+  intro Hc.
+  generalize dependent Γ0; generalize dependent pc0.
+  generalize dependent Γf; generalize dependent pcf.
+  induction c; intros; inversion Hc; subst => //; try reflexivity.
+  - apply IHc1 in H3. apply IHc2 in H6. by etransitivity.
+  - inversion H5; subst. inversion H8; subst.
+    apply IHc1 in H3. apply IHc2 in H4.
+    destruct H3 as [? H3]. destruct H4 as [? H4].
+    eapply flows_join_pc; last done ; done.
+Qed.
+
+Lemma expr_type_flows Γ0 Γ1 e l1:
+  Γ0 ⊑g Γ1 ->
+  {{ Γ1 ⊢ e : l1 }} ->
+  exists l0, flows l0 l1 /\ {{ Γ0 ⊢ e : l0 }}.
+Proof.
+  intros Hflow He1.
+  generalize dependent l1.
+  induction e; intros.
+  - inversion He1; subst. eexists ; split; last econstructor; done.
+  - inversion He1; subst. specialize (Hflow s). rewrite H1 in Hflow.
+    destruct (Γ0 !! s) eqn:Hs0 => //.
+    eexists; split => //. econstructor. done.
+  - inversion He1; subst.
+    apply IHe1 in H4 as (l1 & Hl1 & H1).
+    apply IHe2 in H5 as (l2 & Hl2 & H2).
+    eexists ; split; last econstructor => //.
+    destruct l1, l2, ℓ1, ℓ2 => //.
+Qed.
+
+Lemma expr_type_flows_reverse Γ0 Γ1 e l1:
+  flows_context Γ1 Γ0 ->
+  {{ Γ1 ⊢ e : l1 }} ->
+  exists l0, flows l1 l0 /\ {{ Γ0 ⊢ e : l0 }}.
+Proof.
+  intros Hflow He1.
+  generalize dependent l1.
+  induction e; intros.
+  - inversion He1; subst. eexists ; split; last econstructor. done.
+  - inversion He1; subst. specialize (Hflow s). rewrite H1 in Hflow.
+    destruct (Γ0 !! s) eqn:Hs0 => //.
+    eexists; split => //. econstructor. done.
+  - inversion He1; subst.
+    apply IHe1 in H4 as (l1 & Hl1 & H1).
+    apply IHe2 in H5 as (l2 & Hl2 & H2).
+    eexists ; split; last econstructor => //.
+    destruct l1, l2, ℓ1, ℓ2 => //.
+Qed.
+
+Lemma typecheck_flow_gen Γ0 Γ1 pc0 pc1 c Γf0 pcf0 Γf1 pcf1 :
+  flows_context Γ0 Γ1 ->
+  flows_pc pc0 pc1 ->
+  flows_context Γf1 Γf0 ->
+  flows_pc pcf1 pcf0 ->
+  jtypecheck Γ1 pc1 c Γf1 pcf1 ->
+  jtypecheck Γ0 pc0 c Γf0 pcf0.
+Proof.
+  intros Hcontext Hpc Hcontextf Hpcf Hc.
+  generalize dependent Γf1; generalize dependent pcf1.
+  generalize dependent Γf0; generalize dependent pcf0.
+  generalize dependent Γ1; generalize dependent pc1.
+  generalize dependent Γ0; generalize dependent pc0.
+  induction c; intros; inversion Hc; subst.
+  - econstructor ; repeat (etransitivity => //).
+  - destruct (expr_type_flows _ _ _ _ Hcontext H1) as (l0 & Hl0 & He).
+    econstructor => //.
+    + etransitivity.
+      eapply flows_add. exact Hcontext.
+      eapply flows_fold. exact Hl0. done.
+      etransitivity => //.
+    + repeat (etransitivity => //).
+  - (* Seq *) econstructor.
+    eapply IHc1 in H3 => //.
+    eapply IHc2 in H6 => //.
+  - (* If *)
+    destruct (expr_type_flows _ _ _ _ Hcontext H2) as (l0 & Hl0 & He).
+    rewrite (join_context_self Γf0). econstructor => //.
+    3:{ by apply join_pc_idem. }
+    + eapply IHc1. instantiate (1 := l :: _).
+      simpl. split => //. done.
+      3:exact H5.
+      etransitivity ; [ by eapply flows_pc_join | done ].
+      etransitivity ; [ by eapply flows_context_join | done ].
+    + eapply IHc2. instantiate (1 := l :: _).
+      simpl. split => //. done.
+      3:exact H8.
+      etransitivity; rewrite join_pc_comm in H9
+      ; [ by eapply flows_pc_join | done ].
+      etransitivity; rewrite join_context_comm in Hcontextf
+      ; [by eapply flows_context_join | done ].
+  (* - (* While *) *)
+  (*   destruct (expr_type_flows_reverse _ _ _ _ Hcontextf H5) as (l0 & Hl0 & He). *)
+  (*   econstructor => // ; try (repeat etransitivity => //). *)
+  (*   + eapply IHc ; last done ; try done. *)
+  (*     admit. *)
+  (*     admit. *)
+  - (* Input *)
+    econstructor => //.
+    + clear - H1 Hpc.
+      apply flows_pc_fold in Hpc.
+      by etransitivity.
+    + clear - H4 Hcontext Hcontextf Hpc.
+      do 2 (etransitivity; last done).
+      apply flows_add ; first done.
+      apply flows_fold; done.
+    + repeat etransitivity => //.
+  - (* Output *)
+    destruct (expr_type_flows _ _ _ _ Hcontext H1) as (l0 & Hl0 & He).
+    econstructor => //; try (repeat etransitivity => //).
+    + clear -H2 Hl0 Hpc.
+      do 2 (etransitivity; last done).
+      apply flows_fold; done.
+  - (* Join *)
+    econstructor => //.
+    eapply IHc ; last done ; try done.
+Qed.
+
+Lemma jtype_adequacy_reverse Γ0 pc0 c0 Γf pcf:
+  jtypecheck Γ0 pc0 (jcommand_of_command c0) Γf pcf ->
+  typecheck Γ0 (fold_left join pc0 LPublic) c0 Γf.
+Proof.
+  intros Hc0.
+  generalize dependent Γf; generalize dependent pcf.
+  generalize dependent Γ0; generalize dependent pc0.
+  induction c0; intros; inversion Hc0; subst.
+  - econstructor => //.
+  - econstructor => //.
+    rewrite - (fold_start pc0 le) join_comm in H4; done.
+  - econstructor => //.
+    eapply IHc0_1 => //. eapply IHc0_2 => //.
+    apply jtyping_pc_flows in H3. eapply typecheck_flow_gen in H6; done.
+  - inversion H5; subst. inversion H8; subst.
+    econstructor => //.
+    + apply IHc0_1 in H3; by rewrite fold_join in H3.
+    + apply IHc0_2 in H4; by rewrite fold_join in H4.
+  (* - econstructor => //. *)
+  (*   apply IHc0 in H8. *)
+  (*   admit. (* rewrite join, fold_left etc *) *)
+  - econstructor => //.
+    rewrite - fold_start join_comm in H4; done.
+  - econstructor => //.
+    rewrite fold_start; done.
+Qed.
+
+
+Lemma final_gamma j0 P0 S0 m0 t0 Γ0 pc0 ev P1 S1 m1 t1 Γ1 pc1 Γf pcf:
+  jtypecheck Γ0 pc0 j0 Γf pcf ->
+  exec_with_gamma
+    ( Some j0 , P0, S0, m0, t0 ) Γ0 pc0
+    ev
+    ( None , P1, S1, m1, t1 ) Γ1 pc1 ->
+  flows_context Γ1 Γf /\ flows_pc pc1 pcf.
+Proof.
+  intros Hj0 Hexec.
+  generalize dependent pcf. generalize dependent pc1.
+  induction j0; intros; inversion Hj0; inversion Hexec; subst => //.
+  - split => //.
+    rewrite (expr_type_unique _ _ _ _ H1 H24) in H4; done.
+  - split => //.
+    rewrite fold_secret in H4; done.
+  - apply (IHj0 _ H19) in H2. destruct H2 as [HΓ Hpc]. split => //.
+    by inversion Hpc.
+Qed.
+
+
+(** Preservation *)
+Lemma jtype_preservation j0 P0 S0 m0 t0 Γ0 pc0 j1 P1 S1 m1 t1 Γ1 pc1 ev Γf pcf :
+  wf_memory m0 Γ0 ->
+  jtypecheck Γ0 pc0 j0 Γf pcf ->
+  exec_with_gamma
+    ( Some j0 , P0, S0, m0, t0 ) Γ0 pc0
+    ev
+    ( j1 , P1, S1, m1, t1 ) Γ1 pc1 ->
+  wf_memory m1 Γ1 /\ match j1 with Some j1 => jtypecheck Γ1 pc1 j1 Γf pcf | None => True end.
+Proof.
+  intros Hm0 Hj0 Hexec.
+  generalize dependent j1. generalize dependent Γf. generalize dependent pcf.
+  generalize dependent pc1.
+  induction j0; intros.
+  - (* Skip *) inversion Hexec; subst => //.
+  - (* Assign *) inversion Hexec; subst. split => //. by apply wf_update.
+  - (* Seq *) inversion Hj0; subst. inversion Hexec; subst.
+    + eapply IHj0_1 in H17 as [Hm1 Hc1'] => //.
+      split => //.
+      econstructor => //.
+    + assert (Hexec' := H17). eapply IHj0_1 in H17 as [Hm1 _] => //.
+      split => //.
+      eapply final_gamma in Hexec' => //.
+      destruct Hexec' as [Hcontextf Hpcf].
+      eapply typecheck_flow_gen; try done.
+  - (* IfThenElse *) inversion Hexec; subst => //.
+    inversion Hj0; subst => //. split => //.
+    eapply expr_type_unique in H2 as ->; last exact H17.
+    destruct (v =? 0)%nat.
+    + eapply typecheck_flow_gen; last done ; try done.
+      rewrite join_context_comm; apply flows_context_join.
+      rewrite join_pc_comm in H9; by eapply flows_pc_join.
+    + eapply typecheck_flow_gen; last done ; try done.
+      apply flows_context_join.
+      by eapply flows_pc_join.
+  - (* While *) inversion Hexec; subst => //. split => //. inversion Hj0; subst => //.
+    (* admit. (* TODO is this even true ? *) *)
+  - inversion Hexec; subst => //; split => //; by apply wf_update.
+  - inversion Hexec; subst => //.
+  - inversion Hj0; subst => //. inversion Hexec; subst => //.
+    + eapply IHj0 in H15 as [Hm1 Hj'] => //. split => //.
+      econstructor; done.
+    + split => //. eapply IHj0 in H15 as [Hm1 _] => //.
+Qed.
+
+(** Adequacy typing *)
+Lemma jtype_adequacy Γ0 pc0 c0 Γf pc:
+  typecheck Γ0 pc0 c0 Γf ->
+  fold_left join pc LPublic = pc0 ->
+  jtypecheck Γ0 pc (jcommand_of_command c0) Γf pc.
+Proof.
+  intros Htype Hpc0.
+  generalize dependent Γ0. generalize dependent Γf. generalize dependent pc.
+  generalize dependent pc0.
+  induction c0; intros; simpl;
+    inversion Htype; subst; econstructor => //; try by apply flows_pc_refl.
+  - rewrite - (fold_start pc le) join_comm. done.
+  - eapply IHc0_1 => //.
+  - eapply IHc0_2 => //.
+  - econstructor. eapply IHc0_1. done. rewrite fold_join. done.
+  - econstructor. eapply IHc0_2. done. by rewrite fold_join.
+  - by apply join_pc_idem.
+  (* - eapply IHc0 => //. by rewrite fold_join. *)
+  - rewrite - (fold_start pc (confidentiality_of_channel _)). by rewrite join_comm.
+  - rewrite - (fold_start pc le). done.
+Qed.
+
+
+(** Adequacy operational semantic *)
+Lemma jcommand_adequacy Γ0 pc0 P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 Γf:
+  (* executing implies executing with gammas *)
+  wf_memory m0 Γ0 ->
+  -{ Γ0, pc0  ⊢ c0 ~> Γf }- ->
+  ( Some c0 , P0, S0, m0, t0 ) ---> (c1, P1, S1, m1, t1) ->
+  exists j1 Γ1 pc1 ev,
     exec_with_gamma
-      ( Some (JOutput ch e), S, P, m, t ) Γ ls
+      ( Some (jcommand_of_command c0) , P0, S0, m0, t0 ) Γ0 [pc0]
       ev
-      ( None, S, P, m, EvOutput ch v :: t) Γ ls
-.
-
-(*
-Inductive exec_with_gamma_trans :
-  config -> context -> list confidentiality -> nat ->
-  config -> context -> list confidentiality -> Prop :=
-| Gexec_empty : forall s gamma ls, exec_with_gamma_trans s gamma ls 0 s gamma ls
-| Gexec_step : forall s1 gamma1 ls1 s2 gamma2 ls2 s3 gamma3 ls3 n,
-    exec_with_gamma s1 gamma1 ls1 s2 gamma2 ls2 ->
-    exec_with_gamma_trans s2 gamma2 ls2 n s3 gamma3 ls3 ->
-    exec_with_gamma_trans s1 gamma1 ls1 (n+1) s3 gamma3 ls3
-. *)
-(*
-Definition isPublic ev :=
-  match ev with
-  | EvInput Public _
-  | EvOutput Public _
-  | Write _ _ => True
-  | _ => False
-  end.  *)
-
-Inductive bridge : jconfig -> context -> list confidentiality -> nat -> (* option *) public_event -> jconfig -> context -> list confidentiality -> Prop :=
-(* | BridgeStop : forall c S P m t Γ ls S' P' m' t' Γ' ls',
-    exec_with_gamma
-      ( Some c, S, P, m, t ) Γ ls
-      None
-      ( None, S', P', m', t' ) Γ' ls' ->
-    bridge
-      ( Some c, S, P, m, t ) Γ ls
-      0 None
-      ( None, S', P', m', t' ) Γ' ls' *) 
-| BridgePublic : forall c S P m t t' Γ ls c' S' P' m' ev Γ' ls',
-    exec_with_gamma
-      ( Some c, S, P, m, t ) Γ ls
-      (Some ev)
-      ( c', S', P', m', t') Γ' ls' ->
-    bridge
-      ( Some c, S, P, m, t) Γ ls
-      0 ((* Some *) ev)
-      ( c', S', P', m', t') Γ' ls'
-| BridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
-    exec_with_gamma
-      ( Some c, S, P, m, t ) Γ ls
-      None
-      ( Some c', S', P', m', t' ) Γ' ls' ->
-    bridge
-      ( Some c', S', P', m', t' ) Γ' ls'
-      n e
-      ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
-    bridge
-      ( Some c, S, P, m, t ) Γ ls
-      (Datatypes.S n) e
-      ( c'', S'', P'', m'', t'' ) Γ'' ls''
-.
-
-Inductive write_bridge : jconfig -> context -> list confidentiality -> nat -> public_event -> jconfig -> context -> list confidentiality -> Prop :=
-| WBridgeWrite : forall c S P m t t' Γ ls c' S' P' m' a b Γ' ls',
-    exec_with_gamma
-      ( Some c, S, P, m, t ) Γ ls
-      (Some (WritePublic a b))
-      ( c', S', P', m', t') Γ' ls' ->
-    write_bridge
-      ( Some c, S, P, m, t) Γ ls
-      0 (WritePublic a b)
-      ( c', S', P', m', t') Γ' ls'
-| WBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
-    exec_with_gamma
-      ( Some c, S, P, m, t ) Γ ls
-      None
-      ( Some c', S', P', m', t' ) Γ' ls' ->
-    write_bridge
-      ( Some c', S', P', m', t' ) Γ' ls'
-      n e
-      ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
-    write_bridge
-      ( Some c, S, P, m, t ) Γ ls
-      (Datatypes.S n) e
-      ( c'', S'', P'', m'', t'' ) Γ'' ls''.
-
-Inductive silent_bridge : jconfig -> context -> list confidentiality -> nat -> jconfig -> context -> list confidentiality -> Prop :=
-| IBridgeStop : forall jc Γ ls,
-    silent_bridge
-      jc Γ ls
-      0
-      jc Γ ls
-| IBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n c'' S'' P'' m'' t'' Γ'' ls'',
-    exec_with_gamma
-      ( Some c, S, P, m, t ) Γ ls
-      None
-      ( c', S', P', m', t' ) Γ' ls' ->
-    silent_bridge
-      ( c', S', P', m', t' ) Γ' ls'
-      n
-      ( c'', S'', P'', m'', t'' ) Γ'' ls'' ->
-    silent_bridge
-      ( Some c, S, P, m, t ) Γ ls
-      (Datatypes.S n)
-      ( c'', S'', P'', m'', t'' ) Γ'' ls''
-.
-
-Inductive bridges : jconfig -> context -> list confidentiality -> nat -> list public_event -> jconfig -> context -> list confidentiality -> Prop :=
-(* | LastBridge : forall jc Γ ls jc' Γ' ls' n,
-    incomplete_bridge jc Γ ls n jc' Γ' ls' -> bridges jc Γ ls 0 jc' Γ' ls' *)
-(* | NoBridge : forall jc Γ ls,
-    bridges jc Γ ls 0 [] jc Γ ls *)
-| LastBridge : forall jc Γ ls ev jc' Γ' ls' n,
-    match ev with | Input _ | Output _ => True | _ => False end ->
-    bridge jc Γ ls n ev jc' Γ' ls' ->
-    bridges jc Γ ls 0 [ev] jc' Γ' ls'
-| MoreBridge : forall jc Γ ls jc' Γ' ls' k jc'' Γ'' ls'' n ev evs,
-    bridge jc Γ ls n ev jc' Γ' ls' ->
-    bridges jc' Γ' ls' k evs jc'' Γ'' ls'' ->
-    bridges jc Γ ls (Datatypes.S k) (ev :: evs) jc'' Γ'' ls''
-.
-
-Inductive write_bridges : jconfig -> context -> list confidentiality -> nat -> list public_event -> jconfig -> context -> list confidentiality -> Prop :=
-(* | LastBridge : forall jc Γ ls jc' Γ' ls' n,
-    incomplete_bridge jc Γ ls n jc' Γ' ls' -> bridges jc Γ ls 0 jc' Γ' ls' *)
- | NoWBridge : forall jc Γ ls,
-     write_bridges jc Γ ls 0 [] jc Γ ls 
-(*| LastBridge : forall jc Γ ls ev jc' Γ' ls' n,
-    match ev with | Input _ | Output _ => True | _ => False end ->
-    bridge jc Γ ls n ev jc' Γ' ls' ->
-    bridges jc Γ ls 0 [ev] jc' Γ' ls' *)
-| MoreWBridge : forall jc Γ ls jc' Γ' ls' k jc'' Γ'' ls'' n ev evs,
-    write_bridge jc Γ ls n ev jc' Γ' ls' ->
-    write_bridges jc' Γ' ls' k evs jc'' Γ'' ls'' ->
-    write_bridges jc Γ ls (Datatypes.S k) (ev :: evs) jc'' Γ'' ls''
-.
+      ( j1, P1, S1, m1, t1 ) Γ1 pc1  /\ option_map command_of_jcommand j1 = c1.
+Proof.
+  intros Hwf Htype Hstep.
 
 
-
-
-Inductive full_bridges : jconfig -> context -> list confidentiality -> list public_event -> jconfig -> context -> list confidentiality -> Prop :=
-| BridgesAndEpilogue: forall jc0 Γ0 ls0 k0 jc1 Γ1 ls1 k1 jc2 Γ2 ls2 k2 evs0 evs1 jc3 Γ3 ls3,
-    bridges jc0 Γ0 ls0 k0 evs0 jc1 Γ1 ls1 ->
-    write_bridges jc1 Γ1 ls1 k1 evs1 jc2 Γ2 ls2 ->
-    silent_bridge jc2 Γ2 ls2 k2 jc3 Γ3 ls3 ->
-    full_bridges jc0 Γ0 ls0 evs0 jc3 Γ3 ls3
-| NoPublicEvents: forall jc0 Γ0 ls0 jc1 Γ1 ls1 jc2 Γ2 ls2 k1 evs k2,
-    write_bridges jc0 Γ0 ls0 k1 evs jc1 Γ1 ls1 ->
-    silent_bridge jc1 Γ1 ls1 k2 jc2 Γ2 ls2 ->
-    full_bridges jc0 Γ0 ls0 [] jc2 Γ2 ls2.
-
-Fixpoint trace_of_public_trace evs :=
-  match evs with
-  | [] => []
-  | Input v :: evs => EvInput Public v :: trace_of_public_trace evs
-  | Output v :: evs => EvOutput Public v :: trace_of_public_trace evs
-  | _ :: evs => trace_of_public_trace evs
-  end. 
-
+  generalize dependent c1; generalize dependent Γf.
+  induction c0; intros;
+    try by inversion Hstep; subst; repeat eexists; econstructor.
+  - inversion Hstep; subst. inversion Htype; subst.
+    repeat eexists. econstructor => //. done.
+  - inversion Htype; subst. inversion Hstep; subst.
+    + eapply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+      destruct j1 => //. repeat eexists. econstructor => //=.
+      inversion Ht. simpl. rewrite command_id. done. done.
+    + eapply IHc0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+      destruct j1 => //. repeat eexists. eapply GSeq2 => //.
+      simpl. rewrite command_id. done. done.
+  - inversion Hstep; subst. inversion Htype; subst.
+    eexists _,_,_,_. split. econstructor => //. simpl.
+    destruct (v =? 0)%nat; simpl; rewrite command_id => //.
+  - inversion Hstep; subst.
+    repeat eexists. econstructor. simpl. rewrite command_id. done.
+  - inversion Hstep; subst. inversion Htype; subst.
+    repeat eexists. econstructor => //. simpl. rewrite join_comm in H5. done. done.
+Qed.
