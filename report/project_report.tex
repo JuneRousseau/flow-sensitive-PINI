@@ -85,8 +85,7 @@ channels.
 The security policy that we want to ensure is the confidentiality of the secret inputs. We
 want to make sure that the secret data does not leak. To enforce the confidentiality, we define a
 type-system.
-The threat model is that an attacker can write any program well-typed, and observe the public
-channels. Side-channel such as timing-channel or cache-channel are out of scope.
+The threat model is that an attacker can observe the public channels of any well-typed program. Side-channel such as timing-channel or cache-channel are out of scope.
 
 In our security model, the assurance that the type-system enforce confidentiality is by a formal
 proof. The first step is to formally define what \emph{confidentiality} means. A widely used
@@ -140,6 +139,8 @@ type-system.
 \whilelang is a simple WHILE language with input and output primitives. Figure~\ref{fig:lang_syntax}
 shows the syntax of the language.
 
+\input{figures/lang_syntax}
+
 A configuration is a tuple $\conf \triangleq (c,~S,~P,~m,~\tau)$, where $c$ is a command, $S$ and
 $P$ are the stream of respectively the secret and public inputs, $m$ is the memory (a partial map
 from variables to values) and $\tau$ is the trace of events emitted so far.
@@ -148,9 +149,6 @@ the context.
 
 Figure~\ref{fig:lang_opsem} shows the operational semantic of the language. The operational semantic
 is pretty standard, so we will not \instruction{linger too long on} the explanations.
-
-\instruction{ Figure syntax }
-\instruction{ Figure operational semantic }
 
 \subsection{Non-interference}%
 \label{subsec:ni}
@@ -224,25 +222,39 @@ be another event, but it doesn't know which one precisely.
 
 \subsection{Type system}%
 \label{subsec:type_system}
-
-We define a type system that enforce PINI.
-The type system is flow sensitive.
+In this section, we define a type system that enforces PINI. The type system is flow-sensitive.
 \instruction{ What does flow sensitive means ? }.
 
-\instruction{ What can we say that is interesting about the type system ? }.
-
-For expressions, just like before, \( \etyping{\ctx}{e}{\ell} \) means that expression \( e \) has
-confidentiality level \( \ell \) in context \( \ctx \):
+The typing judgment for expression is fairly standard. \( \etyping{\ctx}{e}{\ell} \) means that
+expression \( e \) has confidentiality level \( \ell \) in context \( \ctx \).
+Figure~\ref{fig:typing_expr} shows the typing rules for expressions. Any binary operations is typed
+with the join of the labels, even though it could be more precise (eg. the expression $x - x$ is
+always 0, so it could be public independently of $x$ being public or secret).
 
 \input{figures/typing_expr.tex}
 
-For commands, \( \typing{\ctx}{\pc}{c}{\ctx'} \) means that in context \( \ctx \) and execution
-level \( \pc \), command \( c \) is safe to execute and after execution, the context is now
-\( \ctx' \).
+The typing judgment for the commands \( \typing{\ctx}{\pc}{c}{\ctx'} \), means that under the context
+\( \ctx \) and execution level \( \pc \), the command \( c \) modify the context to $\ctx'$.
 
-\input{figures/typing_cmd.tex}
+Figure~\ref{fig:typing_cmd} presents the typing rules for the commands. \input{figures/typing_cmd.tex}
+The type system captures the context that can change. We want to capture the programs that change
+the security level of a variable. Because the observable events are the outputs on the public
+channel, the confidentiality level of the variables in memory can safely be modified.
 
-\instruction{Explain while rule}
+An interesting rule is the \textsc{While}. It allows to choose the final context $\ctx'$, that will
+be used to type both the expression and the body of the loop. This context must flows from the
+initial context $\ctx$.
+This final context $\ctx'$ captures the strictest context $\ctx'$, to type the expression and the
+body of the loop, as it has to be the same before and after body. In some way, it expresses some
+sort of a fixpoint over the possible typing-context for the body. It is also necessary to type the
+expression with the final context, as the type of the expression can be depend on variables that are
+modified in the body.
+
+The rest of the typing rules are quite standard information-flow type system. Now that we have
+defined a type-system, we want to prove that it is non-trivial (it types interesting programs) and
+sound (it captures the \instruction{wanted} property). We refer the reader to the
+Appendix~\ref{sec:examples} for some examples of well-typed programs, and we show the soundness in
+the next section.
 
 \section{Soundness}%
 \label{sec:soundness}
@@ -303,29 +315,30 @@ security level $\lpc_{f}$, and emits the event $\alpha$. The emitted event can b
 The main feature of the operational semantic is the management of the pc:
 at every conditional branch, the history is incremented with the security label of the condition
 expression to the pc.
-When reaching a Join instruction, the last pc in the history is poped. If the history is empty, then
+When reaching a Join\footnotemark[1]
+instruction, the last pc in the history is popped. If the history is empty, then
 the pc is public.
 
-Moreover, the language of event is enriched with a $Write$ event, that is emitted at every
-assignment of a public expression. We need to enrich the events because we need to keep track of the
-modifications in memory.
-% Because of the agree on memory
-
-\instruction{ PUT IN FOOTNOTE:
+\footnotetext[1]{
   In the Coq development, the Join takes a command as an argument. In the operational semantic,
   $\mathrm{Join}\ c$ reduces to $c$, while it reduces to $\mathrm{Skip}$ in this case. The reason is
   that it simplifies the adequacy theorem, as there is a one-to-one correspondence between each
   steps. In fine, the two definition are equivalent.
 }
 
-% We define the reflexive and transitive cloture of the relation, which records the trace of the
-% events.
+Moreover, the language of event is enriched with a $Write$ event, that is emitted at every
+assignment of a public expression. We need to enrich the events because we need to keep track of the
+modifications in memory.
+
+\instruction{The full operational semantic rules are available Figure~\ref{fig:lang_aux_opsem}.}
 
 We also define a typing judgment for the auxiliary language, which refines the typing judgment of
 the original language.
-First, the typing judgment also capture the pc after the execution of the command. Then, as the pc
+First, the typing judgment captures the pc after the execution of the command. Then, as the pc
 is now an history of pc, all conditions over the pc takes the join of the history.
-\instruction{reformulate the previous sentence}
+Moreover, the typing rules for the auxiliary language are more relax than
+the one for \whilelang, as it allows to chose a final typing context $\ctx'$ that flows from the
+starting typing context $\ctx$.
 
 The typing system is also extended a rule for the join, which captures the fact that a Join leaves
 the current security level by removing the head pc of the history.
@@ -334,15 +347,15 @@ the current security level by removing the head pc of the history.
     \inferH{Join}
     {\typingaux{\ctx}{\lpc}{c}{\ctx'}{\pc::\lpc'}}
     {\typingaux{\ctx}{\lpc}{\mathrm{Join}~c}{\ctx'}{\lpc'}}
-\]
+  \]
 
+\instruction{The full typing rules are available Figure~\ref{fig:typing_aux}.}
 
 The auxiliary language and type-system enjoy some interesting properties.
 
 % Preservation
 The preservation lemma states that if a well-typed term takes a step, then the resulting term is
 well-typed, under the (potentially) new typing context.
-
 
 \begin{lemma}[Preservation]
   Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
@@ -618,6 +631,35 @@ we think that the missing lemmas are provable.
 \paragraph{Conclusion}
 In this work, we design a type-system for the \whilelang that captures PINI.
 The type-system is mechanized in Coq, as well as its proof of soundness.
+
+\appendix
+
+\section{Operational Semantic \whilelang}%
+\input{figures/lang_opsem}
+
+\section{Examples}%
+\label{sec:examples}
+
+In this section, we present some interesting program that are well-typed according to the
+type-system presented in Figure~\ref{fig:typing_cmd}.
+
+\paragraph{Motivating While}
+The following example motivates the while rule, with final context that flows from the initial
+context. In particular, the initial context at the beginning of the loop is
+$\ctx = \{ x \mapsto \public,\ y \mapsto \public \}$, whereas the final context, when leaving the
+loop, is $\ctx' = \{ x \mapsto \secret,\ y \mapsto \public \}$. In particular, we remark that after
+unrolling the loop once, $x$ is secret, which change the pc of the body from public to secret.
+\begin{verbatim}
+input(public, x) ;
+input(public, y) ;
+while x:
+do
+   input(secret, x);
+done
+output(public, y);
+\end{verbatim}
+\instruction{Another examples}
+
 
 %% References
 %% - Edit literature.bib to add references
