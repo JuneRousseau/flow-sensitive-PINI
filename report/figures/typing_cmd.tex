@@ -21,8 +21,8 @@
 
     \inferH{If}
     { \etyping{\ctx}{e}{ \ell } \and
-      \typing{\ctx}{\pc}{c_{1}}{\ctx_{1}} \and
-      \typing{\ctx}{\pc}{c_{2}}{\ctx_{2}} \and
+      \typing{\ctx}{\join{\pc}{\ell}}{c_{1}}{\ctx_{1}} \and
+      \typing{\ctx}{\join{\pc}{\ell}}{c_{2}}{\ctx_{2}} \and
     }
     {\typing{\ctx}{\pc}{\mathrm{If}~e~c_{1}~c_{2}}{\joinc{\ctx_{1}}{\ctx_{2}}}}
     \and
