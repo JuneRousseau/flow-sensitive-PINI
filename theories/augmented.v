@@ -14,7 +14,8 @@ From fspini Require Import
 Inductive public_event :=
 | Input : value -> public_event
 | Output : value -> public_event
-| Write : var -> value -> public_event
+| WritePublic : var -> value -> public_event
+| BecameSecret : var -> public_event
 .
 
 Inductive jcommand :=
@@ -267,8 +268,10 @@ Inductive exec_with_gamma : jconfig -> context -> list confidentiality -> option
   {{ Γ ⊢ e : l }} ->
   Γ' = <[ x := fold_left join ls l ]> Γ ->
   ev = match l with
-       | LPublic => Some (Write x v)
-       | LSecret => None end ->
+       | LPublic => Some (WritePublic x v)
+       | LSecret => match Γ !! x with
+                   | Some LPublic => Some (BecameSecret x)
+                   | _ => None end end ->
   exec_with_gamma
     ( Some (JAssign x e), S, P, m, t ) Γ ls
     ev
@@ -418,11 +421,11 @@ Inductive write_bridge : jconfig -> context -> list confidentiality -> nat -> pu
 | WBridgeWrite : forall c S P m t t' Γ ls c' S' P' m' a b Γ' ls',
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
-      (Some (Write a b))
+      (Some (WritePublic a b))
       ( c', S', P', m', t') Γ' ls' ->
     write_bridge
       ( Some c, S, P, m, t) Γ ls
-      0 (Write a b)
+      0 (WritePublic a b)
       ( c', S', P', m', t') Γ' ls'
 | WBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
     exec_with_gamma
@@ -508,6 +511,6 @@ Fixpoint trace_of_public_trace evs :=
   | [] => []
   | Input v :: evs => EvInput Public v :: trace_of_public_trace evs
   | Output v :: evs => EvOutput Public v :: trace_of_public_trace evs
-  | Write _ _ :: evs => trace_of_public_trace evs
+  | _ :: evs => trace_of_public_trace evs
   end. 
 

@@ -308,6 +308,76 @@ Proof.
 Qed.
 
 
+(*Fixpoint ifs_entered j n :=
+  match j with
+  | JSkip | JAssign _ _ | JInput _ _ | JOutput _ _ | JWhile _ _ => Some n
+  | JSeq j1 j2 =>
+      match ifs_entered j1 n with
+      | Some m => ifs_entered j2 m
+      | None => None
+      end 
+  | JIfThenElse _ j1 j2 =>
+      match ifs_entered j1 (Datatypes.S n), ifs_entered j2 (Datatypes.S n) with
+      | Some _ , Some _ => Some n
+      | _, _ => None
+      end
+  | JThenJoin j =>
+      match n with
+      | Datatypes.O => None
+      | Datatypes.S m => ifs_entered j m
+      end
+  end.
+
+Definition balanced j := match ifs_entered j 0 with | Some _ => True | _ => False end.
+  
+Lemma balanced_seq j1 j2 : balanced (JSeq j1 j2) -> balanced j1 /\ balanced j2.
+Proof. unfold balanced => //=. destruct (ifs_entered j1 0) eqn:Hj1 => //.
+       destruct (ifs_entered j2 0) => //. 
+
+Lemma can_exec_with_gamma Γ0 pc0 P0 S0 j0 m0 t0 c1 P1 S1 m1 t1 Γf pcs0 :
+  balanced j0 ->
+  wf_memory m0 Γ0 ->
+  -{ Γ0, pc0  ⊢ (command_of_jcommand j0) ~> Γf }- ->
+  ( Some (command_of_jcommand j0) , P0, S0, m0, t0 ) ---> (c1, P1, S1, m1, t1) ->
+  fold_left join (pcs0) LPublic = pc0 ->
+  exists j1 Γ1 pc1 ev,
+    exec_with_gamma
+      ( Some j0 , P0, S0, m0, t0 ) Γ0 (pcs0)
+      ev
+      ( j1, P1, S1, m1, t1 ) Γ1 (pc1)  /\ option_map command_of_jcommand j1 = c1.
+
+Proof.
+  intros Hj0 Hwf Htype Hstep Hpc0.
+
+  generalize dependent c1; generalize dependent Γf.
+  induction j0; intros;
+    try by inversion Hstep; subst; repeat eexists; econstructor.
+  - inversion Hstep; subst. inversion Htype; subst. 
+    repeat eexists. econstructor => //. done.
+  - inversion Htype; subst. inversion Hstep; subst.
+    + eapply IHj0_1 in H0 as (j1 & Γ1 & pc1 & ev & Hexec & Ht).
+      destruct j1 => //. repeat eexists. econstructor => //=.
+      inversion Ht. simpl. done. done. 
+    + eapply IHj0_1 in H0 as (j1 & Γ1 & l & pc1 & ev & Hexec & Ht).
+      destruct j1 => //. repeat eexists. eapply GSeq2 => //.
+      simpl. done. done.
+  - inversion Hstep; subst. inversion Htype; subst.
+    repeat eexists. econstructor => //. simpl.
+    destruct (v =? 0)%nat => //. 
+(*   - inversion Hstep; subst.
+    repeat eexists. econstructor. done. simpl. done. done. *)
+  - inversion Hstep; subst. inversion Htype; subst.
+    repeat eexists. econstructor => //. rewrite - fold_start. done. 
+    done.
+  - eapply IHj0 in Hstep as (j1 & Γ1 & pc1 & ev & Hexec & Ht & Hpc) => //.
+    destruct j1.
+    + repeat eexists. eapply GJoin1. exact Hexec. done. done.
+    + destruct c1 => //. eexists None, _, _, _. split => //.
+      eapply GJoin2. done. admit. exact Hexec.
+    simpl in Hstep. inversion Hstep; subst => //. eapply IHj0 in H
+Qed.
+*)
+
 (* executing implies executing with gammas *)
 Lemma can_exec_with_gamma Γ0 pc0 P0 S0 c0 m0 t0 c1 P1 S1 m1 t1 Γf:
   wf_memory m0 Γ0 ->
@@ -769,17 +839,53 @@ Proof.
     (* + admit. *)
 Admitted. *)
 
-
+(*
+ Lemma bridge_adequacy : 
+    forall n j pc Γ Γf m S P t cf Sf Pf mf tf pcs, 
+      typecheck Γ pc (command_of_jcommand j) Γf -> 
+      wf_memory m Γ -> 
+      (Some (command_of_jcommand j), S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
+      fold_left join pcs LPublic = pc ->
+      exists j' Γ' ls' evs, full_bridges (Some j, S, P, m, t) Γ pcs evs
+                     (j', Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j' = cf /\
+                        (⟦ t ⟧p ++ trace_of_public_trace evs)%list = (⟦ tf ⟧p). 
+  Proof.
+    induction n; intros * Htype Hmem Hred Hpcs; inversion Hred; subst => //.
+    - repeat eexists. econstructor 2. econstructor. econstructor. simpl.
+      done. simpl. by rewrite app_nil_r.
+    - destruct y as [[[[cm Sm] Pm] mm] tm].
+      eapply can_exec_with_gamma in H0 as (jm & Γm & pcm & ev & Hredm & Hjm) => //.
+      assert (Hredm' := Hredm).
+      eapply jtype_adequacy in Htype => //.
+      eapply jtype_preservation in Hredm' as [Hwf Htypem] => //.
+      destruct cm.
+      + destruct jm => //.
+        Admitted. (* apply jtype_adequacy_reverse in Htypem.  eapply IHn in H1 => //. *)
+      
+*)
 
   Lemma bridge_adequacy : 
-    forall n c pc Γ Γf m S P t cf Sf Pf mf tf, 
+    forall n c pc Γ Γf m S P t cf Sf Pf mf tf pcs, 
       typecheck Γ pc c Γf -> 
       wf_memory m Γ -> 
-      (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) -> 
-      exists j Γ' ls' evs, full_bridges (Some (jcommand_of_command c), S, P, m, t) Γ [pc] evs
+      (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
+      fold_left join pcs LPublic = pc ->
+      exists j Γ' ls' evs, full_bridges (Some (jcommand_of_command c), S, P, m, t) Γ pcs evs
                      (j, Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j = cf /\
-  trace_of_public_trace evs = (⟦ tf ⟧p). 
+                        (⟦ t ⟧p ++ trace_of_public_trace evs)%list = (⟦ tf ⟧p). 
   Proof.
+    induction n; intros * Htype Hmem Hred Hpcs; inversion Hred; subst => //.
+    - repeat eexists. econstructor 2. econstructor. econstructor. simpl.
+      rewrite command_id. done. simpl. by rewrite app_nil_r.
+    - destruct y as [[[[cm Sm] Pm] mm] tm].
+      eapply can_exec_with_gamma in H0 as (jm & Γm & pcm & ev & Hredm & Hjm) => //.
+      assert (Hredm' := Hredm).
+      eapply jtype_adequacy in Htype => //.
+      eapply jtype_preservation in Hredm' as [Hwf Htypem] => //.
+      destruct cm.
+      + destruct jm => //. (*apply jtype_adequacy_reverse in Htypem.  eapply IHn in H1 => //.
+      
+    ainsaina *)
   Admitted. 
  (*   intro n. *)
  (*   induction n; *)
@@ -1105,7 +1211,7 @@ Admitted. *)
      *)
 
     
-   Lemma bridge_agree j S1 P m1 t1 Γ pc k ev j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k' ev' j2 S2f P2f m2f t2f Γ2 pc2:
+   Lemma bridge_agree: forall k j k' S1 P m1 t1 Γ pc ev j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 ev' j2 S2f P2f m2f t2f Γ2 pc2,
      agree_on_public Γ m1 m2 ->
      (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
      bridge (Some j , S1 , P , m1 , t1) Γ pc
@@ -1116,35 +1222,47 @@ Admitted. *)
        (j2, S2f, P2f, m2f, t2f ) Γ2 pc2 ->
      (* k = k' /\ *) ev = ev' /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2 /\ agree_on_public Γ1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
    Proof.
-   Admitted.  
-(*
    
-   intros Hm Ht Hbr1 Hbr2.
-     generalize dependent j; generalize dependent S1; generalize dependent P;
+     (*     intros Hm Ht Hbr1 Hbr2. *)
+     intros k.
+     remember k as kind; rewrite Heqkind.
+     assert (k <= kind) as Hk; first lia.
+     clear Heqkind.
+     generalize dependent k.
+(*     generalize dependent j; generalize dependent S1; generalize dependent P;
        generalize dependent m1; generalize dependent t1; generalize dependent Γ;
        generalize dependent pc; generalize dependent S2; generalize dependent m2;
-       generalize dependent t2.
-     induction k; intros.
-     - inversion Hbr1; inversion Hbr2; subst.
-       eapply exec_agree in H31. 4: exact H14. 2: done. 2: done.
-       destruct H31 as (-> & -> & -> & -> & -> & Hmf & Htf).
-       repeat split => //.
-       eapply exec_disagree in H31. 4: exact H14. all:done.
-     - generalize dependent S1; generalize dependent P; generalize dependent m1;
+       generalize dependent t2; generalize dependent k. *)
+     induction kind.
+     - intros * Hk * Hm Ht Hbr1 Hbr2. destruct k; last lia.
+       inversion Hbr1; inversion Hbr2; subst.
+         eapply exec_agree in H31. 4: exact H14. 2: done. 2: done.
+         destruct H31 as (-> & -> & -> & -> & -> & Hmf & Htf).
+         repeat split => //.
+         eapply exec_disagree in H31. 4: exact H14. all:done.
+     - (*generalize dependent S1; generalize dependent P; generalize dependent m1;
          generalize dependent t1; generalize dependent Γ; generalize dependent pc;
-         generalize dependent k'; generalize dependent k.
-       induction j; intros.
-       + inversion Hbr1; subst. inversion H15.
-       + inversion Hbr1; subst. inversion H15.
-       + apply bridge_sequence in Hbr1 as
+         generalize dependent S2; generalize dependent m2; generalize dependent t2;
+           generalize dependent k. *)
+       intros k Hkind j.
+       generalize dependent k.
+       induction j; intros * Hkind * Hm Ht Hbr1 Hbr2.
+         + inversion Hbr1; subst; inversion H15.
+         + inversion Hbr1; subst; inversion H15.
+           subst. eapply (IHkind 0) => //. lia.
+         + apply bridge_sequence in Hbr1 as
              [ (k1 & Sm1 & Pm1 & mm1 & tm1 & Γm1 & pcm1 & Hk1 & Hib1 & Hb1)
              | (j1' & Hb1 & Hj'1) ];
-         apply bridge_sequence in Hbr2 as
-             [ (k2 & Sm2 & Pm2 & mm2 & tm2 & Γm2 & pcm2 & Hk2 & Hib2 & Hb2)
-             | (j2' & Hb2 & Hj'2) ].
-         * apply silent_bridge_preservation in Hib1 as (-> & Hm1 & Ht1).
-           destruct (S k - k1) eqn:Hk. lia.
-           eapply IHj2 in Hb2.
+             apply bridge_sequence in Hbr2 as
+               [ (k2 & Sm2 & Pm2 & mm2 & tm2 & Γm2 & pcm2 & Hk2 & Hib2 & Hb2)
+               | (j2' & Hb2 & Hj'2) ].
+           * apply silent_bridge_preservation in Hib1 as (-> & Hm1 & Ht1).
+             apply silent_bridge_preservation in Hib2 as (-> & Hm2 & Ht2).
+             eapply IHj2 in Hb1 as (-> & -> & -> & -> & -> & Hmf & Htf).
+             
+             5: exact Hb2.
+             repeat split => //. lia. by rewrite - Ht1 Ht.
+             admit.
 
          eapply IHk in H16. 4: exact H34.
 
