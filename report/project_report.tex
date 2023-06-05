@@ -148,7 +148,7 @@ For the sake of the presentation, we might use $c$ and $\conf$ interchangeably w
 the context.
 
 Figure~\ref{fig:lang_opsem} shows the operational semantic of the language. The operational semantic
-is pretty standard, so we will not \instruction{linger too long on} the explanations.
+is pretty standard, so we will not extend the explanations unnecessarily.
 
 \subsection{Non-interference}%
 \label{subsec:ni}
@@ -187,14 +187,14 @@ The intuition is that, if the adversary has already discover the public trace $\
 execution, discovering a new public event $\alpha$ does not provide more knowledge.
 In other words, at any step of computation, the knowledge of the attacker is the same, and it cannot
 narrow down the set of possible secret inputs.
-However, PSNI is hard to enforce. \instruction{why ? because we need to know whether there will be a
-  future event}
+However, PSNI is hard to enforce because we need to know whether there will be a future event, and
+loops are a challenge in this task.
 
 Because PSNI is hard to enforce, we define the \emph{Progress Insensitive Non-Interference} (PINI)
 variant. Intuitively, we allow the adversary to know that there will be a future public event, but
 when it indeed learn the exact event, it does change its knowledge. In order to formally define this
 intuition, we first define the notion of \emph{progress knowledge} $K_{\rightarrow}$, which is a
-variant of the attacker knowledge \instruction{with an additional (any) public event}.
+variant of the attacker knowledge with an additional (any) public event.
 \[
   K_{\rightarrow}(P,~c,~\delta) \triangleq
   \{ S ~|~ \exists \conf',\alpha.\
@@ -252,7 +252,7 @@ modified in the body.
 
 The rest of the typing rules are quite standard information-flow type system. Now that we have
 defined a type-system, we want to prove that it is non-trivial (it types interesting programs) and
-sound (it captures the \instruction{wanted} property). We refer the reader to the
+sound (it captures the wanted property). We refer the reader to the
 Appendix~\ref{sec:examples} for some examples of well-typed programs, and we show the soundness in
 the next section.
 
@@ -309,8 +309,6 @@ The relation \(\execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf_{f}}{\ctx_{f}}{\lpc_{f}
 states that the configuration $\conf$, with the typing context $\ctx$, at the current security level
 $\lpc$ steps to the configuration $\conf_{f}$, with the new typing context $\ctx_{f}$ and the new
 security level $\lpc_{f}$, and emits the event $\alpha$. The emitted event can be empty.
-
-\instruction{figure opsem auxiliary}
 
 The main feature of the operational semantic is the management of the pc:
 at every conditional branch, the history is incremented with the security label of the condition
@@ -423,7 +421,9 @@ In the following diagram, the adequacy lemma states that $j'$ is the compilation
 c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
 \end{tikzcd}
 
-\instruction{transition}
+The auxiliary language allows us to reason on an equivalent language to \whilelang, but which
+carries over more information. However, we still need to reason in a higher level of abstraction to
+prove the soundness of the system.
 
 \subsection{Bridge relations}%
 \label{subsec:brigde_rel}
@@ -481,15 +481,16 @@ We can derive two main theorems: an adequacy theorem and an agreement theorem.
 
   Then, it exists $j$ and $\tau_{f}$ \( \bridge{c}{\tau}{j} \) such that $c' = \compile{j}$ and $\tau_{f} \setminus \mathrm{Write} = \tau'$.
 \end{theorem}
+\instruction{overview of the proofs ?}
 
-\instruction{I'm not happy with this explanation, find a better formulation}
 In other words, the \emph{bridge adequacy} theorem states that if a command is well-type, and takes
 any number of steps, then its auxiliary counterpart bridges to a state that is the compilation of
 the final state and that record exactly the public trace.
+\instruction{I'm not happy with this explanation, find a better formulation}
 
 This theorem then allows to reason on the bridge relation rather than on the operational semantic.
-\instruction{Why is it good ? Because the bridge relation decompose the steps by looking only at the
-  emitted public events, and give more information about what part is synchronized or not}
+The bridge relation decomposes the steps by focusing only at the emitted public events, and give
+information about the state that are synchronized (or not).
 Figure~\ref{fig:bridge_relation} shows draws the adequacy.
 
 \input{figures/bridge_relation.tex}
@@ -531,7 +532,7 @@ same length, the final command is the same, the final memory agree on publics, a
 public traces are the same for both execution.
 It holds because \instruction{fill in}.
 
-\instruction{overview of the proofs ? especially why/where do we need the previous lemmas ? }
+\instruction{overview of the proofs ?}
 
 \subsection{Main theorem}%
 \label{subsec:main_theorem}
@@ -634,9 +635,6 @@ The type-system is mechanized in Coq, as well as its proof of soundness.
 
 \appendix
 
-\section{Operational Semantic \whilelang}%
-\input{figures/lang_opsem}
-
 \section{Examples}%
 \label{sec:examples}
 
@@ -660,6 +658,8 @@ output(public, y);
 \end{verbatim}
 \instruction{Another examples}
 
+\section{Operational Semantic \whilelang}%
+\input{figures/lang_opsem}
 
 %% References
 %% - Edit literature.bib to add references
