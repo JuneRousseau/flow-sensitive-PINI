@@ -17,6 +17,8 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
   forall x,
     match m1 !! x, m2 !! x, Γ !! x with
     | Some v1, Some v2, Some LPublic => v1 = v2
+    (* NOTE Should we capture this ? If we don't, we don't have refl anymore *)
+    | None, None, Some LPublic => True
     | _, _, Some LSecret => True
     | None, None, None => True
     | _, _, _ => False
@@ -25,7 +27,8 @@ Definition agree_on_public (Γ : context) (m1 m2 : memory) : Prop :=
 
 Lemma agree_refl Γ m : wf_memory m Γ -> agree_on_public Γ m m.
 Proof. intros H x. specialize (H x).
-       destruct (m !! x), (Γ !! x) => //. destruct c => //.
+       destruct (m !! x) eqn:Hm, (Γ !! x) eqn:HΓ => //;
+       destruct c => //.
 Qed.
 
 Lemma agree_on_public_comm Γ m1 m2 :
@@ -40,8 +43,8 @@ Qed.
 Proof.
   intros m1 m2 m3 H1 H2 x.
   specialize (H1 x). specialize (H2 x).
-  destruct (m1 !! x), (m2 !! x), (m3 !! x), (Γ !! x) => //.
-  destruct c => //. by subst. destruct c => //.
+  destruct (m1 !! x), (m2 !! x), (m3 !! x), (Γ !! x) => //;
+  destruct c => //. by subst.
 Defined.
 
 Lemma agree_update Γ m1 m2 s vg v:
@@ -67,8 +70,8 @@ Proof.
     repeat rewrite lookup_insert. rewrite H. destruct (m !! s) => //.
   - apply String.eqb_neq in Hx.
     repeat rewrite lookup_insert_ne => //.
-    destruct (m !! x) eqn:Hmx; rewrite Hmx.
-    destruct (Γ !! x) => //. destruct c => //. destruct (Γ !! x) => //.
+    destruct (m !! x) eqn:Hmx; rewrite Hmx;
+    destruct (Γ !! x) => //; destruct c => //; destruct (Γ !! x) => //.
 Qed.
 
 (* If a memory agrees on public variable values, all public expressions evaluated in it
@@ -131,9 +134,14 @@ Proof.
       by repeat (rewrite lookup_insert).
     + apply String.eqb_neq in Heq ; subst.
       by repeat (rewrite lookup_insert_ne).
-  - exfalso ; clear -Hmem.
-    unfold wf_memory in Hmem.
-    specialize (Hmem i). by rewrite lookup_empty lookup_insert in Hmem.
+  - destruct (x =? y) eqn:Heq.
+    + apply String.eqb_eq in Heq ; subst.
+      by repeat (rewrite lookup_insert).
+    + apply String.eqb_neq in Heq ; subst.
+      rewrite lookup_insert_ne => //.
+      rewrite lookup_insert_ne => //.
+      rewrite lookup_empty.
+      by destruct (<[i:=x0]> m !! y).
   (* m = <[ x:= v ]> m' *)
   - exfalso ; clear -Hmem.
     unfold wf_memory in Hmem.
@@ -179,17 +187,18 @@ Proof.
             rewrite lookup_insert.
             specialize (Hmem y).
             rewrite lookup_insert_ne in Hmem => //.
-            rewrite Hy in Hmem.
-            rewrite lookup_insert in Hmem => //.
-        *** apply String.eqb_neq in Heqi0 ; subst.
-           rewrite lookup_insert_ne; first done.
-           destruct (m0 !! y) eqn:Hy0; last done.
-           (* Contradiction with Hmem *)
-           specialize (Hmem y).
-           rewrite lookup_insert_ne in Hmem; try done.
-           rewrite Hy in Hmem.
-           rewrite lookup_insert_ne in Hmem; try done.
-           by rewrite Hy0 in Hmem.
+        *** by destruct (<[i0:=x1]> m0 !! y).
+        (*     (* rewrite Hy in Hmem. *) *)
+        (*     (* rewrite lookup_insert in Hmem => //. *) *)
+        (* *** apply String.eqb_neq in Heqi0 ; subst. *)
+        (*    rewrite lookup_insert_ne; first done. *)
+        (*    destruct (m0 !! y) eqn:Hy0; last done. *)
+        (*    (* Contradiction with Hmem *) *)
+        (*    specialize (Hmem y). *)
+        (*    rewrite lookup_insert_ne in Hmem; try done. *)
+        (*    rewrite Hy in Hmem. *)
+        (*    rewrite lookup_insert_ne in Hmem; try done. *)
+        (*    by rewrite Hy0 in Hmem. *)
 Qed.
 
 (* For this lemma to be true, we must update the definition of wf_memory *)
@@ -197,11 +206,14 @@ Lemma wf_update_secret Γ m s :
   wf_memory m Γ ->
   wf_memory m (<[ s := LSecret ]> Γ).
 Proof.
-Admitted.
-(*     intros H x. specialize (H x).
-     destruct (x =? s) eqn:Hx.
-     - apply String.eqb_eq in Hx as ->.
-       repeat rewrite lookup_insert. destruct (m !! s) => //. *)
+  intros H x. specialize (H x).
+  destruct (x =? s) eqn:Hx.
+  - apply String.eqb_eq in Hx as ->.
+    repeat rewrite lookup_insert. destruct (m !! s) => //.
+  - apply String.eqb_neq in Hx.
+    destruct (m !! x) eqn:Hmx ; rewrite lookup_insert_ne => //.
+Qed.
+
 
 Lemma project_app :
   forall t1 t2,
