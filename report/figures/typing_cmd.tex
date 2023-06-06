@@ -1,14 +1,14 @@
 \begin{figure}[ht]
   \centering
  \begin{mathparpagebreakable}
-    \inferH{Skip} { }
-    {\typing{\ctx}{\pc}{\mathrm{Skip}}{\ctx}}
+    \inferH{Skip} {\flowsto{\ctx}{\ctx'} }
+    {\typing{\ctx}{\pc}{\mathrm{Skip}}{\ctx'}}
     \and
 
     \inferH{Assign}
-    { \etyping{\ctx}{e}{ \ell } \and
+    { \etyping{\ctx}{e}{ \ell } \and \flowsto{(x:\join{\ell}{\pc})::\ctx}{\ctx'}
     }
-    {\typing{\ctx}{\pc}{\mathrm{Assign}~x~e}{(x:\join{\ell}{\pc})::\ctx}}
+    {\typing{\ctx}{\pc}{\mathrm{Assign}~x~e}{\ctx'}}
     \and
 
     \inferH{Seq}
@@ -36,15 +36,15 @@
     \and
 
     \inferH{Input}
-    { \flowsto{\pc}{ch} }
-    {\typing{\ctx}{\pc}{\mathrm{Input}~ch~x}{(x:\join{\ell}{\pc})::\ctx}}
+    { \flowsto{\pc}{ch} \and \flowsto{(x:\join{\ell}{\pc})::\ctx}{\ctx'}}
+    {\typing{\ctx}{\pc}{\mathrm{Input}~ch~x}{\ctx'}}
     \and
 
     \inferH{Output}
     { \etyping{\ctx}{e}{\ell} \and
       \flowsto{\join
-        {\pc}{\ell}}{ch}}
-    {\typing{\ctx}{\pc}{\mathrm{Output}~ch~e}{\ctx}}
+        {\pc}{\ell}}{ch} \and \flowsto{\ctx}{\ctx'}}
+    {\typing{\ctx}{\pc}{\mathrm{Output}~ch~e}{\ctx'}}
  \end{mathparpagebreakable}
   \caption{\label{fig:typing_cmd} Typing rules for commands }
 \end{figure}

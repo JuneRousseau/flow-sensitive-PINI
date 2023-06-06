@@ -238,7 +238,7 @@ always 0, so it could be public regardless of the security level of $x$).
 \input{figures/typing_expr.tex}
 
 The typing judgment for the commands \( \typing{\ctx}{\pc}{c}{\ctx'} \), means that under the context
-\( \ctx \) and execution level \( \pc \), full execution of command \( c \) will modify the context to finally be $\ctx'$.
+\( \ctx \) and execution level \( \pc \), full execution of command \( c \) will modify the context to finally be $\ctx'$. Importantly, it is allowed to strengthen the final context \( \ctx' \) even when unnecessary, as illustrated in the rules for Skip, Assign, Input and Output. This is important, as exitting an If, we must merge the final contexts from the two branches.
 
 Figure~\ref{fig:typing_cmd} presents the typing rules for the commands.
 \input{figures/typing_cmd.tex}
@@ -362,16 +362,16 @@ commands.
 
 The judgement \( \typingaux{\ctx}{\lpc}{j}{\ctx'}{\lpc'} \) states that jcommand \( j \) is well-typed in context \( \ctx \) and under guards \( \lpc \), and after its full execution, the context will be \( \ctx' \) and the list of guards will be \( \lpc' \). The apparition of \( \lpc' \) here is simply to reflect that in general, when executing an arbitrary jcommand \( j \), there might not be Join commands matching all Ifs. We can however show that for all command \( c \), if \( \typingaux{\ctx}{\lpc}{\compile{c}}{\ctx'}{\lpc'} \), then \( \lpc = \lpc' \).
 
-First, the typing judgment captures the pc after the execution of the jcommand. Then, as the pc
-is now an history of pc, all conditions over the pc takes the join of the history. The operation are
-thus lifted to the history of pc.
-Moreover, the typing rules for the auxiliary language are more relax than
-the one for \whilelang, as it allows to chose a final typing context $\ctx'$ that flows from the
-starting typing context $\ctx$.
+%First, the typing judgment captures the pc after the execution of the jcommand. Then, as the pc
+%is now an history of pc, all conditions over the pc takes the join of the history. The operation are
+%thus lifted to the history of pc.
+%Moreover, the typing rules for the auxiliary language are more relax than
+%the one for \whilelang, as it allows to chose a final typing context $\ctx'$ that flows from the
+%starting typing context $\ctx$.
 
 
 
-The typing system is also extended with a rule for the join, which captures the fact that a Join
+The typing system ressembles a lot that of the original language, with an additional rule for the join. This rule captures the fact that a Join
 leaves the current security level by removing the head pc of the history.
 
 \[
@@ -535,11 +535,13 @@ We can derive two main theorems: an adequacy theorem and an agreement theorem.
 
   Then, it exists $j'$ and $\tau_{f}$ such that \( \bridge{\compile{c}}{\tau_{f}}{j'} \), $c' = \uncompile{j'}$ and \( \tau_f \) becomes \( \pproj{\tau'} \) when removing the \( \mathrm{Write}~x~v \) and \( \mathrm{BecameSecret}~x \) events.
 \end{theorem}
-\instruction{overview of the proofs ?}
+
 
 In other words, the \emph{bridge adequacy} theorem states that if a command is well-typed, and takes
 any number of steps, then its auxiliary counterpart bridges to a state that is the compilation of
 the final state and that records exactly the public trace.
+
+This theorem feels like a simple induction on the number of steps, using the jcommand adequacy shown in \S\ref{subsec:aux_lang}. However, difficulties arise from the fact that \( \uncompile{\compile{c}}=c \) but there is no guarantee that \( \compile{\uncompile{j}} \) is equal to \( j \). Further investigation is needed in order to be able to correctly apply the induction hypothesis and prove this theorem.
 % \instruction{I'm not happy with this explanation, find a better formulation}
 
 This theorem then allows to reason on the bridge relation rather than on the operational semantic.
@@ -651,7 +653,7 @@ Finally, we can define the soundness theorem that state that any well-typed comm
   $\delta$ and any public event $\alpha$. We also assume that we have a first execution of the
   program with some secret input stream $S_{1}$, which produces a trace $\tau_{1}$ such that
   $\pproj{\tau_{1}} = \alpha::\delta$.
-  \instruction{double check that I'm not wrong}
+%  \instruction{double check that I'm not wrong}
 
   We need to prove \(K(P,~c,~\alpha::\delta) = K_{\rightarrow}(P,~c,~\delta) \).
   The left-to-right direction is almost trivial, as we already know the next event $\alpha$.
@@ -667,7 +669,7 @@ Finally, we can define the soundness theorem that state that any well-typed comm
 \section{Limits and conclusion}%
 \label{sec:conclusion}
 
-We have formalized the type-system in Coq, but the formalization does not include the whole report.
+We have formalized the type-system in Coq, but the formalization does include some admits.
 
 \paragraph{Incomplete type-system}
 The type-system that we defined actually does not include the typing rule for the While
@@ -685,9 +687,9 @@ loop, but it has not necessarily any relation with the typing context of the Whi
 \paragraph{Incomplete proof}
 Even without the While typing rule, we actually didn't manage to terminate the proof.
 The admitted lemmas are the following:
-\instruction{list the admitted lemmas}
+bridge adequacy~\ref{thm:adequacy} and basic-bridge agree (a lemma that is needed to prove bridge agree~\ref{thm:agree}).
 Although we didn't prove them, we have good reason to believe that we could have go through the
-whole proof if we had more time to complete them. The Coq implementation explains in the comment why
+whole proof by further fine-tuning our definition of observational equivalence. The Coq implementation explains in the comment why
 we think that the missing lemmas are provable.
 
 \paragraph{Conclusion}

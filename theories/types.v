@@ -167,6 +167,7 @@ Proof.
     + by rewrite join_empty_r Hx in Hx'.
     + apply IHΓ'.
       unfold join_context in Hx'.
+      
 Admitted.
 
 (* Lemma flows_context_refl Γ : Γ ⊑g Γ. *)
