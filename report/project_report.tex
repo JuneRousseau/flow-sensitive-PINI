@@ -325,9 +325,8 @@ the pc is public.
 
 Moreover, the language of event is enriched with a $Write$ event, that is emitted at every
 assignment of a public expression. We need to enrich the events because we need to keep track of the
-modifications in memory.
-
-\instruction{The full operational semantic rules are available Figure~\ref{fig:lang_aux_opsem}.}
+modifications in memory. The full operational semantic rules are available
+Figure~\ref{fig:lang_aux_opsem}.
 
 We also define a typing judgment for the auxiliary language, which refines the typing judgment of
 the original language.
@@ -346,7 +345,7 @@ the current security level by removing the head pc of the history.
     {\typingaux{\ctx}{\lpc}{\mathrm{Join}~c}{\ctx'}{\lpc'}}
   \]
 
-\instruction{The full typing rules are available Figure~\ref{fig:typing_aux}.}
+The full typing rules are available Figure~\ref{fig:typing_aux}.
 
 The auxiliary language and type-system enjoy some interesting properties.
 
@@ -667,8 +666,12 @@ output(public, y);
 \section{Operational Semantic \whilelang}%
 \input{figures/lang_opsem}
 
+
+
 \section{Auxilliary language formalization}%
+\input{figures/lang_aux_opsem}
 \input{figures/typing_aux}
+
 %% References
 %% - Edit literature.bib to add references
 %%
