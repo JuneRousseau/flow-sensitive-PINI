@@ -20,6 +20,7 @@
 \usepackage{stmaryrd}
 \usepackage{amsmath}
 \usepackage{amsthm}
+\usepackage{fancyvrb}
 
 \usepackage{tikz-cd}
 \usetikzlibrary{cd}
@@ -652,7 +653,7 @@ context. In particular, the initial context at the beginning of the loop is
 $\ctx = \{ x \mapsto \public,\ y \mapsto \public \}$, whereas the final context, when leaving the
 loop, is $\ctx' = \{ x \mapsto \secret,\ y \mapsto \public \}$. In particular, we remark that after
 unrolling the loop once, $x$ is secret, which change the pc of the body from public to secret.
-\begin{verbatim}
+\begin{Verbatim}[samepage=true]
 input(public, x) ;
 input(public, y) ;
 while x:
@@ -660,7 +661,7 @@ do
    input(secret, x);
 done
 output(public, y);
-\end{verbatim}
+\end{Verbatim}
 \instruction{Another examples}
 
 \section{Operational Semantic \whilelang}%
