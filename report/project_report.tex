@@ -43,7 +43,8 @@
 \newcommand{\whilelang}{\textsc{While Lang} }
 \newcommand{\pproj}[1]{\llbracket #1 \rrbracket_{p}}
 \newcommand{\agree}[3]{#2 \sim_{#1} #3}
-\newcommand{\compile}[1]{ #1 \downarrow }
+\newcommand{\compile}[1]{#1\!\downarrow\ }
+\newcommand{\uncompile}[1]{#1\!\uparrow\ }
 
 \newcommand{\join}[2]{#1 \sqcup #2}
 \newcommand{\flowsto}[2]{#1 \sqsubseteq #2}
@@ -289,9 +290,9 @@ But this causes a difficulty: what context to use when proving that, mid-executi
 
 However, defining this augmented semantics on the language as it was introduced earlier is tricky, since when executing an if-then-else expression and modifying the execution level \( \pc \), we must be able to know when we are done executing the branch inside the if-then-else and should return to the previous \( \pc \).
 
-The solution to this difficulty is to imitate what is shown briefly in (information flow lecture notes): add a \( \mathrm{Join} \) instruction, and keep track not of the current level \( \pc \), but of a list \( \lpc \) of all the levels of the conditions of the ifs we are under. When executing an if-then-else, we add the level of the condition to the list \( \lpc \), and when encountering a \( \mathrm{Join} \), we remove the last security level from the list \( \lpc \). Thus our augmented semantics actually looks like this:\footnote{plus a \emph{public event} on top of the arrow, as we will show in \S\ref{subsection:bridge_rel}}.
+The solution to this difficulty is to imitate what is shown briefly in (information flow lecture notes): add a \( \mathrm{Join} \) instruction, and keep track not of the current level \( \pc \), but of a list \( \lpc \) of all the levels of the conditions of the ifs we are under. When executing an if-then-else, we add the level of the condition to the list \( \lpc \), and when encountering a \( \mathrm{Join} \), we remove the last security level from the list \( \lpc \). Thus our augmented semantics actually looks like this:\footnote{plus a \emph{public event} on top of the arrow, as we will show in \S\ref{subsec:bridge_rel}}.
 \[ (j\sigma, \ctx, \lpc) \to (j\sigma', \ctx', \lpc') \]
-with \( j\sigma \) representing a \emph{jconfiguration}, i.e. a configuration with a \emph{jcommand} instead of a command. In the next subsection, we formally define jcommands and our augmented semantics.
+with \( j\sigma \) representing a \emph{jconfiguration}, i.e. a configuration with a \emph{jcommand} instead of a command. We define jcommands and the augmented semantics formally in \S\ref{subsec:aux_lang}
 %But first, let us define two notions that relate memories and context.
 
 
@@ -309,7 +310,7 @@ with \( j\sigma \) representing a \emph{jconfiguration}, i.e. a configuration wi
 %the current security level.
 
 Then, we show that jcommands are somewhat equivalent to the original language, in the
-sense that there is a way to compile commands into jcommands such that reduction steps in the augmented semantics reflect reduction steps in the original semantics. As such, we can reason on the auxiliary language,
+sense that there is a way to compile commands into jcommands such that reduction steps in the augmented semantics reflect reduction steps in the original semantics. As such, we can reason on jcommands,
 and reflect the result on the original one with an adequacy theorem.
 
 Finally, the main proof uses a bridge relation that allows to reason precisely on the
@@ -319,53 +320,58 @@ transitions emitting a public event, and follows the high-level idea introduced 
 \label{subsec:aux_lang}
 
 % Syntax and opsem
-The syntax of the auxiliary language is similar to the WHILE language, but adds the following
-command explicit \emph{join}. The Join\footnotemark[1] needs to be explicit in order to reason about
+Let us define the auxiliary language of \emph{jcommands} with the exact same syntax as the WHILE language introduced earlier, but we the added command
+\emph{join}. Having an explicit Join\footnote{  In the Coq development, we add a construct \( \mathrm{ThenJoin}\ j \) instead of a \( \mathrm{Join} \). This is meant to represent the program \( j;\ \mathrm{Join} \), since as we will see, all compiled commands \( \compile{c} \) always have the Joins as the right-hand-side of a sequence. This phrasing makes it easier to define \( \uncompile{j} \) and makes the equivalence lemmas between jcommands and commands easier to state and to prove. In fine, both approaches are equivalent. In the appendix, we show the rules used for the \( \mathrm{ThenJoin}\ j \) constructor, to reflect the contents of the Coq development.
+} allows us to reason about
 the security level of the pc when leaving a if-then-else branch.
 
 
-\[ \mathit{cmd}~::=~\cdots~|~\mathrm{Join} \]
+\[ \mathit{j}~::=~\cdots~|~\mathrm{Join} \]
 
-The operational semantic carries along the typing context, which associates a security level to the
-variables in the memory and to the pc. In order to reason about the join points, we need to remember
-the history of the previous pc: as such, the pc is actually a list security labels, where the head
-is the current security level.
+We define a translation from commands to jcommands by defining the jcommand \( \compile{c} \) as a morphism in all cases but If, where \[ \compile{(\mathrm{If}~e~c_1~c_2)}=\mathrm{If}~e~(\compile{c_1};\mathrm{Join})~(\compile{c_2};\mathrm{Join}) \] which reflects that we wish to join at the end of the branches of an If.
 
-The relation \(\execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf_{f}}{\ctx_{f}}{\lpc_{f}} \)
-states that the configuration $\conf$, with the typing context $\ctx$, at the current security level
-$\lpc$ steps to the configuration $\conf_{f}$, with the new typing context $\ctx_{f}$ and the new
-security level $\lpc_{f}$, and emits the event $\alpha$. The emitted event can be empty.
+Conversely, we define \( \uncompile{j} \) as the command that is equal to \( j \) with all its Joins stripped.
+
+As mentionned before, the augmented operational semantic carries along the typing context and a list of security labels corresponding to the security levels of all conditions of ifs that the current expression is under. We denote by \( j\conf \) the equivalent of configurations \( \sigma \) with a jcommand instead of a command.
+
+The relation \(\execaux{j\conf}{\ctx}{\lpc}{\alpha}{j\conf_{f}}{\ctx_{f}}{\lpc_{f}} \)
+states that the jconfiguration $j\conf$, with the typing context $\ctx$, at the current security level
+$\lpc$ steps to the configuration $j\conf_{f}$, with the new typing context $\ctx_{f}$ and the new
+security level $\lpc_{f}$, and emits the event $\alpha$, which can be empty. We will come back to this event in \S\ref{subsec:bridge_rel}.
 
 The main feature of the operational semantic is the management of the pc: at every conditional
 branch, the history is incremented with the security label of the condition expression to the pc.
 When reaching a Join instruction, the last pc in the history is popped. If the history is empty,
-then the pc is public.
+the semantics is stuck, as Joins are meant to indicate that we previously entered an If.
 
-\footnotetext[1]{
-  In the Coq development, we add a construct \( \mathrm{ThenJoin}\ c \) instead of a \( \mathrm{Join} \). This is meant to represent the program \( c;\ \mathrm{Join} \), as Joins always happen as the right-hand-side of a sequence. This phrasing makes the equivalence lemmas between the language with and without join easier to state and to prove. In fine, both approaches are equivalent. 
-}
 
-Moreover, the language of events is enriched with a Write event, that is emitted at every
-assignment of a public expression. We need to enrich the events because we need to keep track of the
-modifications in memory. The full operational semantic rules are available
+%Moreover, the language of events is enriched with a Write event, that is emitted at every
+%assignment of a public expression. We need to enrich the events because we need to keep track of the
+%modifications in memory.
+The full operational semantic rules are available in the appendix in
 Figure~\ref{fig:lang_aux_opsem}.
 
-We also define a typing judgment for the auxiliary language, which refines the typing judgment of
-the original language.
-First, the typing judgment captures the pc after the execution of the command. Then, as the pc
+We also define a typing judgment for the auxiliary language of jcommands, which refines the typing judgment of
+commands.
+
+The judgement \( \typingaux{\ctx}{\lpc}{j}{\ctx'}{\lpc'} \) states that jcommand \( j \) is well-typed in context \( \ctx \) and under guards \( \lpc \), and after its full execution, the context will be \( \ctx' \) and the list of guards will be \( \lpc' \). The apparition of \( \lpc' \) here is simply to reflect that in general, when executing an arbitrary jcommand \( j \), there might not be Join commands matching all Ifs. We can however show that for all command \( c \), if \( \typingaux{\ctx}{\lpc}{\compile{c}}{\ctx'}{\lpc'} \), then \( \lpc = \lpc' \).
+
+First, the typing judgment captures the pc after the execution of the jcommand. Then, as the pc
 is now an history of pc, all conditions over the pc takes the join of the history. The operation are
 thus lifted to the history of pc.
 Moreover, the typing rules for the auxiliary language are more relax than
 the one for \whilelang, as it allows to chose a final typing context $\ctx'$ that flows from the
 starting typing context $\ctx$.
 
+
+
 The typing system is also extended with a rule for the join, which captures the fact that a Join
 leaves the current security level by removing the head pc of the history.
 
 \[
     \inferH{Join}
-    {\typingaux{\ctx}{\lpc}{c}{\ctx'}{\pc::\lpc'}}
-    {\typingaux{\ctx}{\lpc}{\mathrm{Join}~c}{\ctx'}{\lpc'}}
+    {\ } %\typingaux{\ctx}{\lpc}{c}{\ctx'}{\pc::\lpc'}}
+    {\typingaux{\ctx}{\pc::\lpc}{\mathrm{Join}}{\ctx'}{\lpc}}
   \]
 
 The full typing rules are available Figure~\ref{fig:typing_aux}.
@@ -374,30 +380,30 @@ The auxiliary language and type-system enjoy some interesting properties that ar
 remaining of this section.
 
 % Preservation
-The preservation lemma states that if a well-typed term takes a step, then the resulting term is
+The preservation lemma states that if a well-typed jcommand takes a step, then the resulting term is
 well-typed, under the (potentially) new typing context.
 
 \begin{lemma}[Preservation]\label{thm:preservation}
-  Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
-  $\conf' \triangleq (c',~S',~P',~m',~\tau')$ be configurations.
-  Let further suppose:
+  Let $\conf \triangleq (j,~S,~P,~m,~\tau)$ and
+  $\conf' \triangleq (j',~S',~P',~m',~\tau')$ be jconfigurations.
+  Let us further suppose that:
   \begin{itemize}
-    \item $m$ be well-formed memory wrt. $\ctx$
-    \item $\typingaux{\ctx}{\lpc}{c}{\ctx_{f}}{\lpc_{f}}$
-    \item \( \execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf'}{\ctx'}{\lpc'} \)
+    \item $m$ is well-formed wrt. $\ctx$
+    \item $\typingaux{\ctx}{\lpc}{j}{\ctx_{f}}{\lpc_{f}}$
+    \item \( \execaux{j\conf}{\ctx}{\lpc}{\alpha}{j\conf'}{\ctx'}{\lpc'} \)
   \end{itemize}
 
-  Then, $m'$ is well-formed wrt. $\ctx'$, and the command $c'$ is also well-typed
-  $\typingaux{\ctx'}{\lpc'}{c'}{\ctx_{f}}{\lpc_{f}}$.
+  Then, $m'$ is well-formed wrt. $\ctx'$, and the command $j'$ is also well-typed:
+  $\typingaux{\ctx'}{\lpc'}{j'}{\ctx_{f}}{\lpc_{f}}$.
 \end{lemma}
 
 % Adequacy wrt. the WHILE language
-In order to establish an equivalence between the original language and the auxiliary language, we
-define a transformation from the auxiliary language to the original language, which consists on
-erasing the join command; and a transformation from the original language to the original language,
-which consists on adding the join command after every if-then-else.
-We denote the transformation from a command $c$ in \whilelang to the auxiliary language
-$\compile{c}$.
+%In order to establish an equivalence between the original language and the auxiliary language, we
+%define a transformation from the auxiliary language to the original language, which consists on
+%erasing the join command; and a transformation from the original language to the original language,
+%which consists on adding the join command after every if-then-else.
+%We denote the transformation from a command $c$ in \whilelang to the auxiliary language
+%$\compile{c}$.
 
 The equivalence between the two languages are reflected via the two following adequacy theorems:
 
@@ -405,11 +411,11 @@ The equivalence between the two languages are reflected via the two following ad
   For any $\ctx$, $\pc$, $c$ and $\ctx_{f}$,
   \[
   \typing{\ctx}{\pc}{c}{\ctx_{f}}
-  \Leftrightarrow
-    \typingaux{\ctx}{\lpc}{c}{\ctx_{f}}{\lpc}
+  \iff
+    \typingaux{\ctx}{\lpc}{\compile{c}}{\ctx_{f}}{\lpc}
   \]
 
-  where $\pc$ is lifted to $\lpc$.
+  for any \( \lpc \) such that \( \bigsqcup\lpc = \pc \).
 \end{lemma}
 
 The adequacy of the auxiliary typing establishes that the transformation from one language to
@@ -418,19 +424,15 @@ another preserves the typing judgment for the corresponding language.
 \begin{lemma}[Adequacy auxiliary language]
   Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
   $\conf' \triangleq (c',~S',~P',~m',~\tau')$ be configurations.
-  Let suppose:
+  Let us suppose that:
   \begin{itemize}
-    \item $m$ be well-formed memory wrt. $\ctx$
+    \item $m$ is well-formed wrt. $\ctx$
     \item $\typing{\ctx}{\pc}{c}{\ctx_{f}}$
     \item $\exec{\conf}{\conf'}$
   \end{itemize}
 
-  Then, it exists $j'$, $\ctx'$, $\lpc'$ and $\alpha$ such that
-
-  \( \execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf'}{\ctx'}{\lpc'} \),
-
-  where $\pc$ is lifted to $\lpc$, the configuration $\conf$ uses the transformation of the command,
-  and the resulting command $j'$ of configuration $\conf'$ is the transformation of the command $c'$.
+  Then, there exists $j\conf'$, $\ctx'$, $\lpc'$ and $\alpha$ such that
+  \( \execaux{\compile{\conf}}{\ctx}{[\pc]}{\alpha}{j\conf'}{\ctx'}{\lpc'} \) and \( \uncompile{j\conf'}=\conf' \)
 \end{lemma}
 
 The adequacy of the auxiliary language establishes that, if the memory is well-formed, the
@@ -439,8 +441,8 @@ step in the auxiliary language.
 
 In the following diagram, the adequacy lemma states that $j'$ is the compilation of $c'$:
 \begin{tikzcd}
-\compile(c) \arrow[r]  & j'                   \\
-c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
+\compile{c} \arrow[r]  & j' \arrow[d, dashed]                   \\
+c \arrow[u] \arrow[r] & c' 
 \end{tikzcd}
 
 The auxiliary language allows us to reason on an equivalent language to \whilelang, but which

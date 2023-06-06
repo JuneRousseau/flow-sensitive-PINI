@@ -79,9 +79,9 @@
       c' \neq \mathrm{stop}
     }
     {
-      \execaux{(\mathrm{Join}~c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      \execaux{(\mathrm{ThenJoin}~c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
       {\alpha}
-      {(\mathrm{Join}~c',~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+      {(\mathrm{ThenJoin}~c',~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
     }
     \and
 
@@ -92,7 +92,7 @@
       {(\mathrm{stop},~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
     }
     {
-      \execaux{(\mathrm{Join}~c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      \execaux{(\mathrm{ThenJoin}~c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
       {\alpha}
       {(\mathrm{stop},~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
     }
