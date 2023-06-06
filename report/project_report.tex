@@ -119,16 +119,16 @@ We develop a flow-sensitive type-system that enforces PINI, ie. all well-typed p
 and we prove the type system to be sound.
 
 In the following report, we first introduce in
-Section~\ref{subsec:opsem} the I/O \whilelang language, and its operational semantic.
-We then formally define in Section~\ref{subsec:ni} the notion of Progress-Insensitive
+\S\ref{subsec:opsem} the I/O \whilelang language, and its operational semantic.
+We then formally define in \S\ref{subsec:ni} the notion of Progress-Insensitive
 Non-Interference, and we presents the type-system that enforces it in
-Section~\ref{subsec:type_system}.
-Finally, we detail the soundness theorem and its proof in Section~\ref{sec:soundness}.
+\S\ref{subsec:type_system}.
+Finally, we detail the soundness theorem and its proof outline in \S\ref{sec:soundness}.
 
-This work is formalized in the Coq Proof Assistant, available in a
+This work is partially formalized in the Coq Proof Assistant, available in a
 \href{https://github.com/BastienRousseau/flow-sensitive-PINI}{Github repository}.
-The proof is not complete, we then develop the limits of our implementation and the difficulties
-that we encountered in Section~\ref{sec:conclusion}.
+The proof is not complete, and we develop the limits of our implementation and the difficulties
+that we encountered in \S\ref{sec:conclusion}.
 
 \section{Formalization}
 \label{sec:formalization}
@@ -149,8 +149,8 @@ from variables to values) and $\tau$ is the trace of events emitted so far.
 For the sake of the presentation, we might use $c$ and $\conf$ interchangeably when it is clear from
 the context.
 
-Figure~\ref{fig:lang_opsem} shows the operational semantic of the language. The operational semantic
-is pretty standard, so we will not extend the explanations unnecessarily.
+Figure~\ref{fig:lang_opsem} in the Appendix shows the operational semantic of the language. The operational semantics
+are as expected, so we elide extended explanations.
 
 \subsection{Non-interference}%
 \label{subsec:ni}
@@ -186,7 +186,7 @@ Using this base definition, we can define a variant of NI called \emph{Progress 
   &\Rightarrow
   \ K(P,~c,~\alpha::\delta) = K(P,~c,~\delta)
 \end{align*}
-The intuition is that, if the adversary has already discover the public trace $\delta$ during the
+The intuition is that, if the adversary has already discovered the public trace $\delta$ during the
 execution, discovering a new public event $\alpha$ does not provide more knowledge.
 In other words, at any step of computation, the knowledge of the attacker is the same, and it cannot
 narrow down the set of possible secret inputs.
@@ -231,13 +231,13 @@ In this section, we define a flow sensitive type-system that enforces PINI.
 The typing judgment for expression is fairly standard. \( \etyping{\ctx}{e}{\ell} \) means that
 the expression \( e \) has confidentiality level \( \ell \) in context \( \ctx \).
 Figure~\ref{fig:typing_expr} shows the typing rules for expressions. Any binary operations is typed
-with the join of the labels, even though it could be more precise (eg. the expression $x - x$ is
-always 0, so it could be public independently of $x$ being public or secret).
+with the join of the labels, even though this could be made more precise (eg. the expression $x - x$ is
+always 0, so it could be public regardless of the security level of $x$).
 
 \input{figures/typing_expr.tex}
 
 The typing judgment for the commands \( \typing{\ctx}{\pc}{c}{\ctx'} \), means that under the context
-\( \ctx \) and execution level \( \pc \), the command \( c \) modify the context to $\ctx'$.
+\( \ctx \) and execution level \( \pc \), full execution of command \( c \) will modify the context to finally be $\ctx'$.
 
 Figure~\ref{fig:typing_cmd} presents the typing rules for the commands.
 \input{figures/typing_cmd.tex}
@@ -267,33 +267,53 @@ the next section.
 \label{sec:soundness}
 
 The soundness theorem says that the type system enforces PINI. In other words, it formally states
-that any well-typed program is PINI.
-
-But first, let us define two notions that relate memories and context.
-
-We say that a memory $m$ is well-formed wrt. a context $\ctx$, if all the variables defined in $m$
-are also defined in $\ctx$, ie. $\forall x \in m \Rightarrow x \in \ctx$.
-
-We say that a two memories $m_{1}$ and $m_{2}$ agree on the public variables wrt. a context $\ctx$,
-if all the variables defined as public in $\ctx$ are the same in $m_{1}$ and $m_{2}$. We note
-$\agree{\ctx}{m_{1}}{m_{2}}$.
+that any well-typed program is PINI. A state is well-formed when the command types in a context \( \Gamma \) and the initial memory is well-formed wrt. \( \ctx \), which we define by 
+%We say that a memory $m$ is well-formed wrt. a context $\ctx$, if
+all the variables defined in $m$
+are also defined in $\ctx$, ie. $\forall x, x \in m \implies x \in \ctx$.
 
 \subsection{Approach}%
 \label{subsec:approach}
 
-In order to prove the theorem, we follow a similar approach than the one in (information flow
-lecture notes).
+To prove that all well-typed programs are PINI, we suppose we have two runs of the program with observable traces of equal length. The high-level intuition of the proof is that ``at every step that produces a public event, the states are observationally equivalent''.
 
-First, we define an auxiliary, augmented language, that explicitly specify when we reach a join
-point. Then, we define its semantic, that keeps track of the type with the typing environment and
-the current security level.
+The way we define ``at every step that produces a public event'' is similar to the approach of (information flow lecture notes), via use of a bridge relation (or in fact several bridge relations), as detailed in \S\ref{subsec:bridge_rel}.
 
-Then, we show that this auxiliary language is somewhat equivalent to the original language, in the
-sense that there is a correspondence between them. As such, we can reason on the auxiliary language,
+The we we define states to be ``observationally equivalent'' is more interesting. This entails, for one, that we should define what it means for two memories to be observationally equivalent. To that end, 
+we say that a two memories $m_{1}$ and $m_{2}$ agree on the public variables wrt. a context $\ctx$,
+if all the variables defined as public in $\ctx$ are the same in $m_{1}$ and $m_{2}$. We note
+$\agree{\ctx}{m_{1}}{m_{2}}$. Knowledge of the context \( \ctx \) is crucial, as our operational semantics allows the context to change over execution if, say, a variable that carried a secret value is assigned a new public value.
+
+But this causes a difficulty: what context to use when proving that, mid-execution, two memories agree on public variables? To this end, we introduce a new augmented operational semantics, that keeps track of the context. In order to be able to correctly update the context when executing an assignment, we also need to keep track of the execution level \( \pc \), and this execution level can change as well when executing if-then-else expression. Hence at first glance, we could try to define our new augmented semantics in this form:
+\[ (\sigma, \ctx, \pc) \to (\sigma', \ctx', \pc') \]
+
+However, defining this augmented semantics on the language as it was introduced earlier is tricky, since when executing an if-then-else expression and modifying the execution level \( \pc \), we must be able to know when we are done executing the branch inside the if-then-else and should return to the previous \( \pc \).
+
+The solution to this difficulty is to imitate what is shown briefly in (information flow lecture notes): add a \( \mathrm{Join} \) instruction, and keep track not of the current level \( \pc \), but of a list \( \lpc \) of all the levels of the conditions of the ifs we are under. When executing an if-then-else, we add the level of the condition to the list \( \lpc \), and when encountering a \( \mathrm{Join} \), we remove the last security level from the list \( \lpc \). Thus our augmented semantics actually looks like this:\footnote{plus a \emph{public event} on top of the arrow, as we will show in \S\ref{subsection:bridge_rel}}.
+\[ (j\sigma, \ctx, \lpc) \to (j\sigma', \ctx', \lpc') \]
+with \( j\sigma \) representing a \emph{jconfiguration}, i.e. a configuration with a \emph{jcommand} instead of a command. In the next subsection, we formally define jcommands and our augmented semantics.
+%But first, let us define two notions that relate memories and context.
+
+
+
+
+
+%\subsection{Approach}%
+%\label{subsec:approach}
+
+%In order to prove the theorem, we follow a similar approach than the one in (information flow
+%lecture notes).
+
+%First, we define an auxiliary, augmented language, that explicitly specify when we reach a join
+%point. Then, we define its semantic, that keeps track of the type with the typing environment and
+%the current security level.
+
+Then, we show that jcommands are somewhat equivalent to the original language, in the
+sense that there is a way to compile commands into jcommands such that reduction steps in the augmented semantics reflect reduction steps in the original semantics. As such, we can reason on the auxiliary language,
 and reflect the result on the original one with an adequacy theorem.
 
-Finally, the main proof remains on a bridge relation, that allows to reason precisely on the
-transitions emitting a public event.
+Finally, the main proof uses a bridge relation that allows to reason precisely on the
+transitions emitting a public event, and follows the high-level idea introduced above.
 
 \subsection{Auxiliary language}%
 \label{subsec:aux_lang}
@@ -322,10 +342,7 @@ When reaching a Join instruction, the last pc in the history is popped. If the h
 then the pc is public.
 
 \footnotetext[1]{
-  In the Coq development, the Join takes a command as an argument. In the operational semantic,
-  $\mathrm{Join}\ c$ reduces to $c$, while it reduces to $\mathrm{Skip}$ in this case. The reason is
-  that it simplifies the adequacy theorem, as there is a one-to-one correspondence between each
-  steps. In fine, the two definition are equivalent.
+  In the Coq development, we add a construct \( \mathrm{ThenJoin}\ c \) instead of a \( \mathrm{Join} \). This is meant to represent the program \( c;\ \mathrm{Join} \), as Joins always happen as the right-hand-side of a sequence. This phrasing makes the equivalence lemmas between the language with and without join easier to state and to prove. In fine, both approaches are equivalent. 
 }
 
 Moreover, the language of events is enriched with a Write event, that is emitted at every
