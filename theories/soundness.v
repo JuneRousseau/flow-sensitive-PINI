@@ -22,28 +22,55 @@ Lemma bridge_adequacy :
   (Some c, S, P, m, t) --->[n] (cf, Sf, Pf, mf, tf) ->
   exists j Γ' ls' evs, bridge (Some (jcommand_of_command c), S, P, m, t) Γ [pc] evs
                     (j, Sf, Pf, mf, tf) Γ' ls' /\ option_map command_of_jcommand j = cf /\
-                    trace_of_public_trace evs = (⟦ tf ⟧p).
+                    (trace_of_public_trace evs ++ ⟦ t ⟧p)%list = (⟦ tf ⟧p).
 Proof.
 Admitted.
+(* Proof attempt:
 
- (*   intro n. *)
- (*   induction n; *)
- (*     intros * Hc Hm Hred. *)
- (*   { inversion Hred; subst. repeat eexists. econstructor. econstructor.  *)
- (*     simpl. by rewrite command_id. } *)
-
- (*   inversion Hred; subst. *)
- (*   destruct y as [[[[c1 S1] P1] m1] t1]. *)
- (*   destruct c1; last first. *)
- (*   - inversion H1; subst; last by inversion H. *)
- (*     eapply can_exec_with_gamma in H0 as (j1 & Γ1 & pc1 & ev & Hredg & Hj); last done. *)
- (*     destruct j1 => //. *)
- (*     destruct ev. *)
- (*     + repeat eexists. econstructor 2. apply BridgePublic. exact Hredg. *)
- (*       econstructor. econstructor. done. *)
- (*     + repeat eexists. econstructor 2. econstructor. exact Hredg. *)
- (*       econstructor. econstructor. done. *)
- (*   - eapply IHn in H1. *)
+    intro n. 
+    induction n; 
+      intros * Hc Hm Hred. 
+    { inversion Hred; subst. repeat eexists. econstructor 2.
+      econstructor.  econstructor. simpl. rewrite command_id. done. done. } 
+    inversion Hred; subst. 
+    destruct y as [[[[c1 S1] P1] m1] t1]. 
+    destruct c1; last first. 
+    - inversion H1; subst; last by inversion H. 
+      eapply jcommand_adequacy in H0 as (j1 & Γ1 & pc1 & ev & Hredg & Hj) => //. 
+      destruct j1 => //. 
+      destruct ev. 
+      + destruct p.
+        * repeat eexists. econstructor 1. econstructor.
+          2:{ econstructor. exact Hredg. }
+          done. econstructor.  econstructor. done.
+          apply exec_grow_trace in Hredg. done.
+        * repeat eexists. econstructor.  econstructor.
+          2:{ econstructor. exact Hredg. }
+          done. econstructor. econstructor. done.
+          apply exec_grow_trace in Hredg. done.
+        * repeat eexists. econstructor 2. econstructor 2.
+          econstructor. 2: exact Hredg. done. econstructor.
+          econstructor. done. apply exec_grow_trace in Hredg. done.
+        * repeat eexists. econstructor 2. econstructor 2.
+          econstructor. 2: exact Hredg. done. econstructor.
+          econstructor. done. apply exec_grow_trace in Hredg. done.
+      + repeat eexists. econstructor 2. econstructor. econstructor. exact Hredg.
+        econstructor. done. by apply exec_grow_trace in Hredg.
+    - eapply jcommand_adequacy in H0 => //.
+      destruct H0 as (j1 & Γ1 & pc1 & ev & Hredg & Hj).
+      eapply jtype_adequacy in Hc ; last by instantiate (1 := [pc]); destruct pc.
+      assert ( Hredg' := Hredg ).
+      eapply jtype_preservation in Hredg' as [Hm1 Hj1] => //.
+      destruct j1 => //. inversion Hj.
+      assert (-{ Γ1, fold_left join pc1 LPublic ⊢ c0 ~> Γf }-). admit.
+      eapply IHn in H1 => //.
+      destruct H1 as (j' & Γ' & ls' & evs & Hbr & Hj' & Htf).
+      inversion Hbr; subst.
+      
+(*      + destruct ev as [p|]; repeat eexists.
+        * econstructor. econstructor 2. econstructor. exact Hredg.
+          rewrite command_id in H1. 
+          exact H1. *)
 
    (* destruct ev. *)
    (* - repeat eexists. econstructor 2. apply BridgePublic. exact Hredg. *)
@@ -58,7 +85,7 @@ Admitted.
    (*     { inversion H1. inversion H0. } *)
    (*     destruct j1 => //. inversion Hj; subst.  *)
    (*     assert (-{ Γ1, fold_left join pc1 LPublic ⊢ (command_of_jcommand j) ~> Γf }-). *)
- (* Admitted. *)
+ (* Admitted. *) *)
 
 (** Agreements theorems *)
 
@@ -167,7 +194,7 @@ Proof.
     generalize dependent m; generalize dependent t; generalize dependent Γ;
     generalize dependent pc.
   induction k; intros; inversion Hbr; subst.
-  - apply exec_with_gamma_no_event in H14 => //.
+  - apply exec_with_gamma_no_event in H15 => //.
   - apply exec_with_gamma_no_event in H15 => //.
     apply IHk in H16 => //. by rewrite H15 H16.
 Qed.
@@ -441,7 +468,7 @@ Proof.
       destruct jc4 as [[[[??]?]?]?].
       eapply final_nw_bridges_agree in H.
       8: exact H2.
-      do 6 destruct H as [_ H]. rewrite H in Hk1. rewrite Hk1 in Hk2. done.
+      do 6 destruct H as [_ H]. rewrite H in Hk1. rewrite - Hk1 - Hk2 Ht. done.
       eapply jtype_adequacy. done. done. done. done. done. done.
       apply silent_bridge_agree in H4 as (_ & _ & _ & Htf1).
       apply silent_bridge_agree in H1 as (_ & _ & _ & Htf2).

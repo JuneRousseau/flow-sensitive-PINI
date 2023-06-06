@@ -56,14 +56,15 @@ Inductive final_nw_bridges : jconfig -> context -> list confidentiality -> nat -
 (* Write-bridge relation that relates two states emitting no event for n-1 steps,
    then finally a write event *)
 Inductive write_bridge : jconfig -> context -> list confidentiality -> nat -> public_event -> jconfig -> context -> list confidentiality -> Prop :=
-| WBridgeWrite : forall c S P m t t' Γ ls c' S' P' m' a b Γ' ls',
+| WBridgeWrite : forall c S P m t t' Γ ls c' S' P' m' ev Γ' ls',
+    match ev with WritePublic _ _ | BecameSecret _ => True | _ => False end ->
     exec_with_gamma
       ( Some c, S, P, m, t ) Γ ls
-      (Some (WritePublic a b))
+      (Some ev)
       ( c', S', P', m', t') Γ' ls' ->
     write_bridge
       ( Some c, S, P, m, t) Γ ls
-      0 (WritePublic a b)
+      0 ev
       ( c', S', P', m', t') Γ' ls'
 | WBridgeMulti : forall c S P m t Γ ls c' S' P' m' t' Γ' ls' n e c'' S'' P'' m'' t'' Γ'' ls'',
     exec_with_gamma

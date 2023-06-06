@@ -623,6 +623,7 @@ Proof.
 Qed.
 
 
+
 Lemma final_gamma j0 P0 S0 m0 t0 Γ0 pc0 ev P1 S1 m1 t1 Γ1 pc1 Γf pcf:
   jtypecheck Γ0 pc0 j0 Γf pcf ->
   exec_with_gamma
