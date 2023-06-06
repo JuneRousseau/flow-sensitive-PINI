@@ -238,7 +238,7 @@ always 0, so it could be public regardless of the security level of $x$).
 \input{figures/typing_expr.tex}
 
 The typing judgment for the commands \( \typing{\ctx}{\pc}{c}{\ctx'} \), means that under the context
-\( \ctx \) and execution level \( \pc \), full execution of command \( c \) will modify the context to finally be $\ctx'$. Importantly, it is allowed to strengthen the final context \( \ctx' \) even when unnecessary, as illustrated in the rules for Skip, Assign, Input and Output. This is important, as exitting an If, we must merge the final contexts from the two branches.
+\( \ctx \) and execution level \( \pc \), full execution of command \( c \) will modify the context to finally be $\ctx'$. 
 
 Figure~\ref{fig:typing_cmd} presents the typing rules for the commands.
 \input{figures/typing_cmd.tex}
@@ -248,6 +248,8 @@ In particular, it captures the programs that change the security level of a vari
 observable events are the outputs of the public channel, the internal modifications of the memory are
 not observable right away. As such, the confidentiality level of the variables in memory can safely
 be modified.
+
+Importantly, it is allowed to strengthen the final context \( \ctx' \) even when unnecessary, as illustrated in the rules for Skip, Assign, Input and Output. This is important, as exitting an If, we must merge the final contexts from the two branches.
 
 An interesting rule is the \textsc{While}. It allows to choose the final context $\ctx'$, that will
 be used to type both the expression and the body of the loop. This final context must flows from the
