@@ -266,14 +266,16 @@ sound (it captures the wanted property). We refer the reader to the
 Appendix~\ref{sec:examples} for some examples of well-typed programs, and we show the soundness in
 the next section.
 
+While proving soundness, it will often be useful to relate memories and context. 
+We say that a memory $m$ is well-formed wrt. a context $\ctx$, if
+all the variables defined in $m$
+are also defined in $\ctx$, ie. $\forall x, x \in m \implies x \in \ctx$.
+
 \section{Soundness}%
 \label{sec:soundness}
 
 The soundness theorem says that the type system enforces PINI. In other words, it formally states
-that any well-typed program is PINI. A state is well-formed when the command types in a context \( \Gamma \) and the initial memory is well-formed wrt. \( \ctx \), which we define by 
-%We say that a memory $m$ is well-formed wrt. a context $\ctx$, if
-all the variables defined in $m$
-are also defined in $\ctx$, ie. $\forall x, x \in m \implies x \in \ctx$.
+that any well-typed program is PINI. 
 
 \subsection{Approach}%
 \label{subsec:approach}
@@ -282,9 +284,9 @@ To prove that all well-typed programs are PINI, we suppose we have two runs of t
 
 The way we define ``at every step that produces a public event'' is similar to the approach of (information flow lecture notes), via use of a bridge relation (or in fact several bridge relations), as detailed in \S\ref{subsec:bridge_rel}.
 
-The we we define states to be ``observationally equivalent'' is more interesting. This entails, for one, that we should define what it means for two memories to be observationally equivalent. To that end, 
+The way we define states to be ``observationally equivalent'' is more interesting. This entails, for one, that we should define what it means for two memories to be observationally equivalent. To that end, 
 we say that a two memories $m_{1}$ and $m_{2}$ agree on the public variables wrt. a context $\ctx$,
-if all the variables defined as public in $\ctx$ are the same in $m_{1}$ and $m_{2}$. We note
+if all the variables defined as public in $\ctx$ are the same in $m_{1}$ and $m_{2}$. We then write
 $\agree{\ctx}{m_{1}}{m_{2}}$. Knowledge of the context \( \ctx \) is crucial, as our operational semantics allows the context to change over execution if, say, a variable that carried a secret value is assigned a new public value.
 
 But this causes a difficulty: what context to use when proving that, mid-execution, two memories agree on public variables? To this end, we introduce a new augmented operational semantics, that keeps track of the context. In order to be able to correctly update the context when executing an assignment, we also need to keep track of the execution level \( \pc \), and this execution level can change as well when executing if-then-else expression. Hence at first glance, we could try to define our new augmented semantics in this form:
@@ -378,11 +380,11 @@ leaves the current security level by removing the head pc of the history.
 
 \[
     \inferH{Join}
-    {\ } %\typingaux{\ctx}{\lpc}{c}{\ctx'}{\pc::\lpc'}}
+    {\flowsto{\ctx}{\ctx'} } %\typingaux{\ctx}{\lpc}{c}{\ctx'}{\pc::\lpc'}}
     {\typingaux{\ctx}{\pc::\lpc}{\mathrm{Join}}{\ctx'}{\lpc}}
   \]
 
-The full typing rules are available Figure~\ref{fig:typing_aux}.
+The full typing rules are available in the appendix, in Figure~\ref{fig:typing_aux}.
 
 The auxiliary language and type-system enjoy some interesting properties that are detailed in the
 remaining of this section.
