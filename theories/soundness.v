@@ -276,7 +276,8 @@ Qed.
        (j2, S2f, P2f, m2f, t2f ) Γf2 pc2 ->
      ev = ev' /\ j1 = j2 /\ P1f = P2f /\ context_agree Γf1 Γf2 /\ pc1 = pc2 /\ agree_on_public Γf1 m1f m2f /\ (⟦ t1f ⟧p) = (⟦ t2f ⟧p).
    Proof.
-   
+   Admitted.
+   (* Proof attempt:
      (*     intros Hm Ht Hbr1 Hbr2. *)
      intros k.
      remember k as kind; rewrite Heqkind.
@@ -347,32 +348,33 @@ Qed.
  *)
 
 (* TODO explain lemma *)
-Lemma final_nw_bridges_agree j S1 P m1 t1 Γ pc k1 j1 S1f P1f m1f t1f Γ1 pc1 S2 m2 t2 k2 j2 S2f P2f m2f t2f Γ2 pc2 Γf pcf evs1 evs2:
-  jtypecheck Γ pc j Γf pcf ->
-  wf_memory m1 Γ ->
-  agree_on_public Γ m1 m2 ->
+Lemma final_nw_bridges_agree j S1 P m1 t1 Γ1 pc k1 j1 S1f P1f m1f t1f Γf1 pc1 S2 m2 t2 k2 Γ2 j2 S2f P2f m2f t2f Γf2 pc2 Γf pcf evs1 evs2:
+  jtypecheck Γ1 pc j Γf pcf ->
+  wf_memory m1 Γ1 ->
+  agree_on_public Γ1 m1 m2 ->
   (⟦ t1 ⟧p) = (⟦ t2 ⟧p) ->
+  context_agree Γ1 Γ2 ->
   length (⟦ t1f ⟧p) = length (⟦ t2f ⟧p) ->
-  final_nw_bridges (Some j, S1, P, m1, t1) Γ pc
-    k1 evs1 (j1, S1f, P1f, m1f, t1f) Γ1 pc1 ->
-  final_nw_bridges (Some j, S2, P, m2, t2) Γ pc
-    k2 evs2 (j2, S2f, P2f, m2f, t2f) Γ2 pc2 ->
-  k1 = k2 /\ j1 = j2 /\ P1f = P2f /\ Γ1 = Γ2 /\ pc1 = pc2
-  /\ agree_on_public Γ1 m1f m2f /\ evs1 = evs2.
+  final_nw_bridges (Some j, S1, P, m1, t1) Γ1 pc
+    k1 evs1 (j1, S1f, P1f, m1f, t1f) Γf1 pc1 ->
+  final_nw_bridges (Some j, S2, P, m2, t2) Γ2 pc
+    k2 evs2 (j2, S2f, P2f, m2f, t2f) Γf2 pc2 ->
+  k1 = k2 /\ j1 = j2 /\ P1f = P2f /\ context_agree Γf1 Γf2 /\ pc1 = pc2
+  /\ agree_on_public Γf1 m1f m2f /\ evs1 = evs2.
 Proof.
-  intros Htype Hwf Hm Ht Hlen Hred1 Hred2.
+  intros Htype Hwf Hm Ht HΓ Hlen Hred1 Hred2.
   generalize dependent j; generalize dependent S1 ; generalize dependent m1;
     generalize dependent t1; generalize dependent evs1;
     generalize dependent S2; generalize dependent m2;
     generalize dependent t2; generalize dependent evs2;
     generalize dependent P; generalize dependent k2;
-    generalize dependent Γ; generalize dependent pc.
+    generalize dependent Γ1; generalize dependent Γ2; generalize dependent pc.
   induction k1; intros; inversion Hred1; subst.
   - inversion Hred2; subst.
     + eapply basic_bridge_agree in H2.
-      4: exact H0. 3: done. 2: done.
-      destruct H2 as (-> & -> & -> & -> & -> & Hm' & Ht').
-      done.
+      5: exact H0. 3: done. 2: done. 2: done.
+      destruct H2 as (-> & -> & -> & HΓ' & -> & Hm' & Ht').
+      repeat split => //. 
     + assert (H0' := H0).
       apply basic_bridge_grow_trace in H0.
       destruct jc' as [[[[??]?]?]?].
@@ -381,7 +383,7 @@ Proof.
       apply final_nw_bridges_grow_trace in H2.
       rewrite - Hlen H1 H0 Ht in H2.
       eapply basic_bridge_agree in H1'.
-      4: exact H0'. 3: done. 2: done.
+      5: exact H0'. all: try done. 
       destruct H1' as (-> & _).
       destruct ev0 => //; simpl in H2; lia.
   - inversion Hred2; subst.
@@ -392,23 +394,22 @@ Proof.
       apply basic_bridge_grow_trace in H1.
       rewrite Hlen H0 H1 Ht in H4.
       eapply basic_bridge_agree in H1'.
-      4: exact H0'. 3: done. 2: done.
+      5: exact H0'. all: try done.
       destruct H1' as (-> & _).
       destruct ev0 => //; simpl in H4; lia.
     + destruct jc'0 as [[[[ j0 S0 ] P0 ] m0 ] t0].
       destruct jc' as [[[[ j' S' ] P' ] m' ] t'].
       eapply basic_bridge_agree in H.
-      4: exact H0. 3: done. 2: done.
-      destruct H as (-> & -> & -> & -> & -> & Hm' & Ht').
+      5: exact H0. all: try done.
+      destruct H as (-> & -> & -> & HΓ' & -> & Hm' & Ht').
       destruct j0.
       2:{ apply final_nw_bridges_none in H4 => //. }
       eapply IHk1 in H4.
-      6: exact H1.
-      destruct H4 as (-> & -> & -> & -> & -> & Hmf & ->).
+      7: exact H1.
+      destruct H4 as (-> & -> & -> & HΓf & -> & Hmf & ->).
       repeat split => //.
-      done.
+      all: try done.
       eapply preservation_basic_bridge in H0 as [??] => //.
-      done.
       eapply preservation_basic_bridge in H0 as [??] => //.
 Qed.
 
@@ -439,38 +440,38 @@ Proof.
       destruct jc3 as [[[[??]?]?]?].
       destruct jc4 as [[[[??]?]?]?].
       eapply final_nw_bridges_agree in H.
-      7: exact H2.
+      8: exact H2.
       do 6 destruct H as [_ H]. rewrite H in Hk1. rewrite Hk1 in Hk2. done.
-      eapply jtype_adequacy. done. done. done. done. done.
-      apply silent_bridge_agree in H4 as (_ & _ & Htf1).
-      apply silent_bridge_agree in H1 as (_ & _ & Htf2).
+      eapply jtype_adequacy. done. done. done. done. done. done.
+      apply silent_bridge_agree in H4 as (_ & _ & _ & Htf1).
+      apply silent_bridge_agree in H1 as (_ & _ & _ & Htf2).
       apply write_bridges_agree in H3 as Ht3.
       apply write_bridges_agree in H0 as Ht4.
       by rewrite Ht3 Ht4 Htf1 Htf2.
     + destruct jc3 as [[[[??]?]?]?].
       apply write_bridges_agree in H2 as Ht1.
-      apply silent_bridge_agree in H3 as (_ & _ & Ht2).
+      apply silent_bridge_agree in H3 as (_ & _ & _ & Ht2).
       rewrite - Ht2 - Ht1 Ht in Hlen.
       destruct jc1 as [[[[??]?]?]?].
       apply final_nw_bridges_grow_trace in H.
       destruct jc2 as [[[[??]?]?]?].
       apply write_bridges_agree in H0 as Ht3.
-      apply silent_bridge_agree in H1 as (_ & _ & Ht4).
+      apply silent_bridge_agree in H1 as (_ & _ & _ & Ht4).
       rewrite Ht3 Ht4 in H. lia.
   - destruct jc1 as [[[[??]?]?]?].
     apply write_bridges_agree in H as Ht1.
-    apply silent_bridge_agree in H0 as (_ & _ & Ht2).
+    apply silent_bridge_agree in H0 as (_ & _ & _ & Ht2).
     inversion Hred1; subst.
     + rewrite - Ht2 - Ht1 - Ht in Hlen.
       destruct jc1 as [[[[??]?]?]?].
       apply final_nw_bridges_grow_trace in H0.
       destruct jc2 as [[[[??]?]?]?].
       apply write_bridges_agree in H1 as Ht3.
-      apply silent_bridge_agree in H2 as (_ & _ & Ht4).
+      apply silent_bridge_agree in H2 as (_ & _ & _ & Ht4).
       rewrite Ht3 Ht4 in H0. lia.
     + destruct jc1 as [[[[??]?]?]?].
       apply write_bridges_agree in H0 as Ht3.
-      apply silent_bridge_agree in H1 as (_ & _ & Ht4).
+      apply silent_bridge_agree in H1 as (_ & _ & _ & Ht4).
       rewrite - Ht2 - Ht1 - Ht4 - Ht3 => //.
 Qed.
 
@@ -499,3 +500,4 @@ Proof.
     rewrite Ht1 Ht2 => //. done. done. done. done.
     rewrite Ht1 in Ht2. by inversion Ht2.
 Qed.
+
