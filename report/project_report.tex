@@ -472,13 +472,13 @@ This motivates separating non-emitting execution steps from those who emit publi
 %irrelevant steps, and allows us to reason on the steps emitting a public event only.
 We establish this by introducing \emph{bridging relations}.
 
-In order to maintain the idea introduced in \S\ref{subsec:approach} that ``at every step that produces a public event, the states are observationally equivalent'', it is convenient to consider writes to public variables to be public events, as well as public variables becoming secret. To this end, the event \( \alpha \) mentionned in \S\ref{subse:aux_lang} in our augmented jcommand semantics are not only inputs and outputs, but also public writes \( \mathrm{Write}~x~v \) and variables ceasing to be public \( \mathrm{BecameSecret}~x \).
+In order to maintain the idea introduced in \S\ref{subsec:approach} that ``at every step that produces a public event, the states are observationally equivalent'', it is convenient to consider writes to public variables to be public events, as well as public variables becoming secret. To this end, the event \( \alpha \) mentionned in \S\ref{subsec:aux_lang} in our augmented jcommand semantics are not only inputs and outputs, but also public writes \( \mathrm{Write}~x~v \) and variables ceasing to be public \( \mathrm{BecameSecret}~x \).
 
 
 With this definition of public events, we can show that a single step in the augmented jcommand semantics
 \begin{itemize}
 \item does not observationally change the state if no public event is produced
-\item does not observationally chaneg the trace if no public input or output is produced
+\item does not observationally change the trace if no public input or output is produced
 \item gives observationally equivalent results when given observationally equivalent starting points, if a public event is produced
 \end{itemize}
 
