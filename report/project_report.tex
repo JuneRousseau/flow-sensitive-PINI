@@ -550,43 +550,44 @@ Figure~\ref{fig:bridge_relation} draws the adequacy.
 \input{figures/bridge_relation.tex}
 
 \begin{theorem}[Bridge agree]\label{thm:agree}
+  If two observationally equivalent states bridge to two final states, where the length of the public projection of trace in the final states are equal, then those public projections are equal
+  
+  %Assume
+%  \begin{itemize}
+ %   \item $\agree{\ctx}{m_{1}}{m_{2}}$
+  %  \item $\typing{\ctx}{\pc}{c}{\ctx_{f}}$
+   % \item $\pproj{\tau_{1}} = \pproj{\tau_{2}}$
+%    \item $\bridge{(c,~S_{1},~P,~m_{1},~\tau_{1})}{n_{1}}(c_{1}',~S_{1}',~P_{1}',~m_{1}',~\tau_{1}')$
+ %   \item $\bridge{(c,~S_{2},~P,~m_{2},~\tau_{2})}{n_{2}}(c_{2}',~S_{2}',~P_{2}',~m_{2}',~\tau_{2}')$
+  %  \item $\mathrm{len}(\pproj{\tau_{1}'}) = \mathrm{len}(\pproj{\tau_{2}'})$
+%  \end{itemize}
 
-  Assume
-  \begin{itemize}
-    \item $\agree{\ctx}{m_{1}}{m_{2}}$
-    \item $\typing{\ctx}{\pc}{c}{\ctx_{f}}$
-    \item $\pproj{\tau_{1}} = \pproj{\tau_{2}}$
-    \item $\bridge{(c,~S_{1},~P,~m_{1},~\tau_{1})}{n_{1}}(c_{1}',~S_{1}',~P_{1}',~m_{1}',~\tau_{1}')$
-    \item $\bridge{(c,~S_{2},~P,~m_{2},~\tau_{2})}{n_{2}}(c_{2}',~S_{2}',~P_{2}',~m_{2}',~\tau_{2}')$
-    \item $\mathrm{len}(\pproj{\tau_{1}'}) = \mathrm{len}(\pproj{\tau_{2}'})$
-  \end{itemize}
-
-  Then,
-  the final commands are the same $c_{1}' = c_{2}'$,
-  the memories agree on the public variables $\agree{\ctx_{f}}{m_{1}}{m_{2}}$, % is this true ???
-  and the public traces are the same $\pproj{\tau_{1}'} = \pproj{\tau_{2}'}$
+ % Then,
+%  the final commands are the same $c_{1}' = c_{2}'$,
+%  the memories agree on the public variables $\agree{\ctx_{f}}{m_{1}}{m_{2}}$, % is this true ???
+%  and the public traces are the same $\pproj{\tau_{1}'} = \pproj{\tau_{2}'}$
 \end{theorem}
 
 The theorem can be split in 3 lemmas: basic-bridge agree, write-bridge agree, and silent-bridge
-agree.
+agree. These state stronger properties: if two observationnally equivalent states basic-bridge or write-bridge to two final states, those final states are observationally equivalent; and if an initial state silent-bridges to a final state, then that initial state and that final state are observationally equivalent. These lemmas can be derived from the observation we made earlier on single execution steps.
 
-Silent-bridge agree states that in-between two silent bridge of two executions,
-the memory agree on public, public input are the same and the public
-traces are the same for both execution. It holds because silent-bridge relates states that do not
-emit any public events: the traces don't change, and the public part of the memory don't change
-either.
+%Silent-bridge agree states that in-between two silent bridge of two executions,
+%the memory agree on public, public input are the same and the public
+%traces are the same for both execution. It holds because silent-bridge relates states that do not
+%emit any public events: the traces don't change, and the public part of the memory don't change
+%either.
 
-Write-bridge agree states that in-between two write-bridges of two executions,
-the public traces are the same for both execution. It holds because write-bridge relates states that
-do not emit only write-events, which means that memories might not agree on the public anymore, but
-they do not emit any visible events in the trace.
+%Write-bridge agree states that in-between two write-bridges of two executions,
+%the public traces are the same for both execution. It holds because write-bridge relates states that
+%do not emit only write-events, which means that memories might not agree on the public anymore, but
+%they do not emit any visible events in the trace.
 
-Basic-bridge is the main lemma: it states that in-between two basic-bridges of two executions of
-same length, the final command is the same, the final memory agree on public, and
-public traces are the same for both execution.
-It holds because \instruction{fill in}.
+%Basic-bridge is the main lemma: it states that in-between two basic-bridges of two executions of
+%same length, the final command is the same, the final memory agree on public, and
+%public traces are the same for both execution.
+%It holds because \instruction{fill in}.
 
-\instruction{overview of the proofs ?}
+%\instruction{overview of the proofs ?}
 
 \subsection{Main theorem}%
 \label{subsec:main_theorem}
