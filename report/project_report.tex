@@ -326,7 +326,13 @@ Let us define the auxiliary language of \emph{jcommands} with the exact same syn
 the security level of the pc when leaving a if-then-else branch.
 
 
-\[ \mathit{j}~::=~\cdots~|~\mathrm{Join} \]
+\[ \mathit{j}~::=~\mathrm{Skip}\
+|\ \mathrm{Assign}~x~e\
+|\ \mathrm{If}~e~j~j\
+|\ j;j\
+|\ \mathrm{While}~e~j\
+|\ \mathrm{Input}~ch~x\
+|\ \mathrm{Output}~ch~e\ |~\mathrm{Join} \]
 
 We define a translation from commands to jcommands by defining the jcommand \( \compile{c} \) as a morphism in all cases but If, where \[ \compile{(\mathrm{If}~e~c_1~c_2)}=\mathrm{If}~e~(\compile{c_1};\mathrm{Join})~(\compile{c_2};\mathrm{Join}) \] which reflects that we wish to join at the end of the branches of an If.
 
@@ -440,55 +446,79 @@ command is well-typed in the original language, and takes a step, then we can al
 step in the auxiliary language.
 
 In the following diagram, the adequacy lemma states that $j'$ is the compilation of $c'$:
+
+\begin{center}
 \begin{tikzcd}
-\compile{c} \arrow[r]  & j' \arrow[d, dashed]                   \\
-c \arrow[u] \arrow[r] & c' 
+\compile{c} \arrow[r, dashed]  & j' \arrow[d, dashed]                  \\
+c \arrow[u] \arrow[r] & c'
 \end{tikzcd}
+\end{center}
 
 The auxiliary language allows us to reason on an equivalent language to \whilelang, but which
-carries over more information. However, we still need to reason in a higher level of abstraction to
-prove the soundness of the system.
+carries over more information. We are now ready to carry out the rest of the proof.
 
 \subsection{Bridge relations}%
-\label{subsec:brigde_rel}
+\label{subsec:bridge_rel}
 
-The main hurdle in the proof is that some step do not emit any event, which makes these steps
-irrelevant regarding the definition of the knowledge. As such, we want a relation that skips the
-irrelevant steps, and allows us to reason on the steps emitting a public event only.
-We call this kind of relations the \emph{bridging relations}.
+When executing two runs from the same command with the same public inputs, the two runs may take different paths in some execution steps, for instance when executing an if-then-else statement whose condition is a secret expression. If the command is well-typed, typing guarantees that no public inputs or outputs occurs while the runs have different behaviours. In fact, the typing even guarantees that any assigns in these phases will be on secret variables, which means when exit the if-branch, the memory will agree on public variables, which is what gives the program the PINI property.
+
+This motivates separating non-emitting execution steps from those who emit public events.
+%Some step do not emit any event, which makes these steps
+%irrelevant regarding the definition of the knowledge. As such, we want a relation that skips the
+%irrelevant steps, and allows us to reason on the steps emitting a public event only.
+We establish this by introducing \emph{bridging relations}.
+
+In order to maintain the idea introduced in \S\ref{subsec:approach} that ``at every step that produces a public event, the states are observationally equivalent'', it is convenient to consider writes to public variables to be public events, as well as public variables becoming secret. To this end, the event \( \alpha \) mentionned in \S\ref{subse:aux_lang} in our augmented jcommand semantics are not only inputs and outputs, but also public writes \( \mathrm{Write}~x~v \) and variables ceasing to be public \( \mathrm{BecameSecret}~x \).
+
+
+With this definition of public events, we can show that a single step in the augmented jcommand semantics
+\begin{itemize}
+\item does not observationally change the state if no public event is produced
+\item does not observationally chaneg the trace if no public input or output is produced
+\item gives observationally equivalent results when given observationally equivalent starting points, if a public event is produced
+\end{itemize}
+
+The definition of ``observationally equivalent'' is left vague here, as we have modified its exact meaning many times in order to adapt the proofs, and haven't settled on one that works. We believe that it would be sensible to require public input streams to be equal, require nothing of the secret input streams, require `equivalent' contexts, require memories to agree on public values in these equivalent contexts, and require the public projections of the traces to be equal. However, it appears that in some proofs, we would also need to relate the \( \lpc \) lists in the states, and it is unclear how to do that meaningfully.
+
 
 We define multiple kind of bridging relations, that relates two states in different ways, depending
 of the kind of public events.
 
 \begin{itemize}
-  \item Basic-bridge relation (\emph{basic\_bridge} in the Coq development):
+  \item Basic-bridge relation: % (\emph{basic\_bridge} in the Coq development):
         two states basic-bridge in n steps, if they take n-1 steps without emitting any public
-        event, and then take any public event.
-  \item Write-bridge relation (\emph{write\_bridge} in the Coq development):
+        event, and then take a step with a public event.
+  \item Write-bridge relation: % (\emph{write\_bridge} in the Coq development):
         two states write-bridge in n steps, if they take n-1 steps without emitting any public
-        event, and then take a write public event.
-  \item Silent-bridge relation (\emph{silent\_bridge} in the Coq development):
-        two states silent-bridge in n steps, if they take n steps without emitting
+        event, and then take a step with a \( \mathrm{Write}~x~v \) or \( \mathrm{BacemeSecret}~x \) public event.
+  \item Silent-bridge relation: %(\emph{silent\_bridge} in the Coq development):
+    two states silent-bridge in n steps, if they take n steps without emitting any public event
 \end{itemize}
 
-We define the transitive closure for the write-bridge relation. One may notice that it cannot be
-reflexive, as it imposes at least one step emitting a write event.
+Finally, the \emph{bridge} relation ties everything together (here we conflate the notation \( j\sigma \) with the more correct \( (j\sigma, \ctx, \lpc) \)): \( j\sigma \) bridges to \( j\sigma' \), which we write \( \bridge{j\sigma}{\tau}{j\sigma'} \), where \( \tau \) is the sequence of public events produced, if either \begin{itemize}
+\item there exists a state \( j\sigma_m \) such that \( j\sigma \) becomes \( j\sigma_m \) in 0 or more write-bridges, and \( j\sigma_m \) silent-bridges to \( j\sigma' \), or
+\item there exists states \( j\sigma_{lio} \), \( j\sigma_{lio}' \) and \( j\sigma_m \) such that \( j\sigma \) becomes \( j\sigma_{lio} \) (last input/output) in 0 or more basic-bridges, \( j\sigma_{lio} \) becomes \( j\sigma_{lilo}' \) in exactly 1 basic-bridge whose event is an input or output, \( j\sigma_{lio}' \) becomes \( j\sigma_m \) in 0 or more write-bridges, and \( j\sigma_m \) silent-bridges to \(j\sigma' \) 
+\end{itemize}
+In other words, in the first case there are no public inputs or output produced at all, and in the second case we separate the last public input or output. This is done because to prove PINI, we must show that any two runs that have produced the same amount of inputs or outputs (even if still mid-execution) have identical public traces, so separating the last public input or output is convenient in the proof. 
 
-The bridge relation (\emph{bridge} in the Coq development) is our main bridging relation. There is
-two different ways for two states to bridge:
-first, the starting state takes any number of basic-bridges, then it takes one basic-bridge that do
-not emit a write-event, then any number of write-bridge, and finally any number of silent-bridges;
-the second way is to take any number of write-bridge, and then any number of silent-bridges.
+%We define the transitive closure for the write-bridge relation. One may notice that it cannot be
+%reflexive, as it imposes at least one step emitting a write event.
 
-Figure~\ref{fig:bridge_relation} shows these two different ways to bridge, where $b$ stands for
+%The bridge relation (\emph{bridge} in the Coq development) is our main bridging relation. There is
+%two different ways for two states to bridge:
+%first, the starting state takes any number of basic-bridges, then it takes one basic-bridge that do
+%not emit a write-event, then any number of write-bridge, and finally any number of silent-bridges;
+%the second way is to take any number of write-bridge, and then any number of silent-bridges.
+
+Figure~\ref{fig:bridge_relation} illustrates the adequacy theorem below, and shows these two different ways to bridge, where $b$ stands for
 basic-bridge, $bnw$ for basic-bridge non-write, $wb$ for write-bridge and $sb$ for silent-bridge.
-The adequacy allows one to move from the original language to the auxiliary one, and the other way around.
+The adequacy theorem below allows one to move from the original language to the auxiliary one, and the other way around.
 
 % Motivation for all the relations
-The different bridge relations allows us to decompose any pack of steps by the kind of events, and
-to know precisely what is synchronized or not each time.
-\instruction{a bit more motivations: the first path actually change the trace, while the 2nd one not
-really, as it only perform public writes}
+%The different bridge relations allows us to decompose any pack of steps by the kind of events, and
+%to know precisely what is synchronized or not each time.
+%\instruction{a bit more motivations: the first path actually change the trace, while the 2nd one not
+%really, as it only perform public writes}
 
 We can derive two main theorems: an adequacy theorem and an agreement theorem.
 \begin{theorem}[Bridge adequacy]\label{thm:adequacy}
@@ -503,8 +533,7 @@ We can derive two main theorems: an adequacy theorem and an agreement theorem.
    \item \( \execn{\conf}{n}{\conf'} \)
  \end{itemize}
 
-  Then, it exists $j$ and $\tau_{f}$ such that \( \bridge{c}{\tau_{f}}{j} \), $c' = \compile{j}$ and
-  $\tau_{f} \setminus \mathrm{Write} = \tau'$.
+  Then, it exists $j'$ and $\tau_{f}$ such that \( \bridge{\compile{c}}{\tau_{f}}{j'} \), $c' = \uncompile{j'}$ and \( \tau_f \) becomes \( \pproj{\tau'} \) when removing the \( \mathrm{Write}~x~v \) and \( \mathrm{BecameSecret}~x \) events.
 \end{theorem}
 \instruction{overview of the proofs ?}
 
