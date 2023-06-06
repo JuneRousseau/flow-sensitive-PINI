@@ -15,8 +15,47 @@
 \input{prelude}
 \input{instructions}
 
+\usepackage{mathpartir}
+\usepackage{pftools}
+\usepackage{stmaryrd}
+\usepackage{amsmath}
+\usepackage{amsthm}
+\usepackage{fancyvrb}
+
+\usepackage{tikz-cd}
+\usetikzlibrary{cd}
+
+% Notations
+\newcommand{\pc}{\mathrm{pc}}
+\newcommand{\lpc}{\mathrm{lpc}}
+\newcommand{\ctx}{\Gamma}
+\newcommand{\conf}{\sigma}
+\newcommand{\public}{\mathrm{LPublic}}
+\newcommand{\secret}{\mathrm{LSecret}}
+\newcommand{\typing}[4]{ #1,~#2 \vdash #3 \rightsquigarrow #4}
+\newcommand{\typingaux}[5]{ #1,~#2 \vdash #3 \rightsquigarrow #4,~#5}
+\newcommand{\execaux}[7] { (#1,~#2,~#3) \xrightarrow{#4} (#5,~#6,~#7) }
+% (config, Γ, lpc) - ev -> (config_f, Γf, lpcf)
+\newcommand{\exec}[2] { #1 \rightarrow #2 }
+\newcommand{\exectrans}[2] { #1 \rightarrow^{*} #2 }
+\newcommand{\execn}[3] { #1 \rightarrow^{#2} #3 }
+\newcommand{\bridge}[3] { #1 \curvearrowright_{#2} #3 }
+\newcommand{\whilelang}{\textsc{While Lang} }
+\newcommand{\pproj}[1]{\llbracket #1 \rrbracket_{p}}
+\newcommand{\agree}[3]{#2 \sim_{#1} #3}
+\newcommand{\compile}[1]{ #1 \downarrow }
+
+\newcommand{\join}[2]{#1 \sqcup #2}
+\newcommand{\flowsto}[2]{#1 \sqsubseteq #2}
+\newcommand{\etyping}[3]{ #1 \vdash #2 : #3}
+\newcommand{\pini}[1]{\mathrm{PINI}(#1)}
+
+% Environment
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}{Lemma}
+
 \title{
-   Flow-Sensitive Type System for PINI --- Project Report
+   Flow-Sensitive Type System for PINI
 }
 
 \groupNumber{1}
@@ -25,176 +64,625 @@
 \begin{document}
 \maketitle
 
-\begin{abstract}
-   Abstract of the project report: what, why PINI ? Type system for enforcement. Soundness.
-\end{abstract}
+% \begin{abstract}
+%    Abstract of the project report: what, why PINI ? Type system for enforcement. Soundness.
+% \end{abstract}
 
 \thispagestyle{empty}
 
 \section{Introduction}
 \label{sec:intro}
-\instruction{ Write introduction }
 
-Threat model: integrity, confidentiality, availability. For confidentiality, in a simple setup: 2
-channels (public and private). We want to make sure that the secret data does not leak, both
-directly (output a data tagged as secret on the public channel) or indirectly (event on the public
-channel that happens in a control-flow depending on a secret input).
+In a computer system, the security policies define what kind of properties are desired on the
+system. Integrity, confidentiality and availability are widespread and well-studied policies.
+The security mechanisms are the implementations of a specific method to enforce the security policy,
+against an attacker that have a precise, specific power over the system.
+
+In the case of confidentiality, we want to keep some data of the system secret. An attacker should
+not be able to read, or get any information about these data. We consider a simple system, a
+programming language with I/O primitives, communicating with two kinds of I/O channels: public and
+secret channels.
+The security policy that we want to ensure is the confidentiality of the secret inputs. We
+want to make sure that the secret data are not leaked. To enforce the confidentiality, we define a
+type-system enforcing the values typed as secret are not printed through the public channel.
+The threat model is that an attacker can observe the public channels of any well-typed program.
 Side-channel such as timing-channel or cache-channel are out of scope.
 
-Concept of non-interference, meaning that ``public outputs do not depend on secret inputs''.
-Non-interference is a 2-hyperproperty, which means that it is a property that depends on 2
-execution traces of the program. The way to prove that public outputs are independent from the
-secret input is to run the same program 2 times, with the same public inputs, but different secret
-input. If we notice a difference on the public output channel, only the secret input are responsible
-(as the public ones are the same), and the not independent.
+In our security model, we assure that the type-system actually enforce confidentiality using a
+formal proof.
+The first step is to formally define what \emph{confidentiality} means. A widely used
+definition of confidentiality is called \emph{non-interference}. In a high-level way,
+non-interference means that ``public outputs do not depend on secret inputs''.
+More formally, non-interference is a 2-hyperproperty, which means that it is a property that
+depends on 2 execution traces of the program. It captures the confidentiality by comparing
+two execution traces with the same public inputs, but different secret inputs. If it is possible
+to differentiate the traces by looking only at the public output events, only the secret inputs can
+be responsible (as the public ones are the same in both execution).
 
-Different variant of non-interference: for instance, terminaison sensitive (TSNI), terminaison insensitive
-(TINI).
-Traditionally two way to enforce NI:
+Non-interference (NI) is actually a class of properties for which it exists different variants. For
+instance, we can cite \emph{Termination Sensitive NI} (TSNI) or \emph{Termination Insensitive NI}
+(TINI). The latter allows an adversary to differentiate a secret with the non-termination of the
+execution, while the former does not.
+There are traditionally two ways to enforce non-interference:
 \begin{itemize}
-  \item Monitor, that \emph{dynamically} check the public output channel that it does not leak
-        values tagged as secret.
-  \item Type system, which ensure \emph{statically} that a well-typed program respects NI.
+  \item monitor based: \emph{dynamically} checks that the public output channel does not leak values
+        tagged as secret
+  \item type-system based: \emph{statically} ensures that a well-typed program respects NI
 \end{itemize}
 
-\instruction{ Do we detail more the two approaches ? I don't think that it is necessary }
+In this work, we focus in a variant of NI called \emph{Progress-Insensitive Non-Interference}
+(PINI).
+Intuitively, PINI ensures that, if the adversary knows that there will be at least one more public
+event, it cannot gain any knowledge on the secret by learning what this event actually is. PINI is
+interesting, as we can see it as a variant of TINI with intermediate I/O.
+We develop a flow-sensitive type-system that enforces PINI, ie. all well-typed program respects PINI,
+and we prove the type system to be sound.
 
-In this work, we focus in a variant of NI, called Progress-Insensitive-Non-Interference (PINI).
-Interesting because \instruction{ complete }.
-We develop a flow-sensitive type-system that enforce PINI, ie. all well-typed program respects PINI.
-We prove that the type system is sound.
-
-In the following report, we first introduce the operational semantic of the language in
-Section~\ref{subsec:opsem} that we consider.
-We then formally define our notion of non-interference Section~\ref{subsec:ni}, as well as the type
-system to enforce it Section~\ref{subsec:type_system}.
+In the following report, we first introduce in
+Section~\ref{subsec:opsem} the I/O \whilelang language, and its operational semantic.
+We then formally define in Section~\ref{subsec:ni} the notion of Progress-Insensitive
+Non-Interference, and we presents the type-system that enforces it in
+Section~\ref{subsec:type_system}.
 Finally, we detail the soundness theorem and its proof in Section~\ref{sec:soundness}.
 
-This work is formalized in the Coq Proof Assistant.
+This work is formalized in the Coq Proof Assistant, available in a
+\href{https://github.com/BastienRousseau/flow-sensitive-PINI}{Github repository}.
+The proof is not complete, we then develop the limits of our implementation and the difficulties
+that we encountered in Section~\ref{sec:conclusion}.
 
-\section{Blabla}
-\label{sec:bla}
-\instruction{ Fill the section }
+\section{Formalization}
+\label{sec:formalization}
+In this section, we formally introduce the \whilelang, the non-interference property and the
+type-system.
 
-\subsection{WHILE language with I/O}%
+\subsection{\whilelang}%
 \label{subsec:opsem}
 
-The language is a simple WHILE language with I/O.
-\instruction{ Figure syntax }
-\instruction{ Figure operational semantic }
+\whilelang is a simple WHILE language with input and output primitives. Figure~\ref{fig:lang_syntax}
+shows the syntax of the language.
+
+\input{figures/lang_syntax}
+
+A configuration is a tuple $\conf \triangleq (c,~S,~P,~m,~\tau)$, where $c$ is a command, $S$ and
+$P$ are resp. the secret and public input streams, $m$ is the memory (a partial map
+from variables to values) and $\tau$ is the trace of events emitted so far.
+For the sake of the presentation, we might use $c$ and $\conf$ interchangeably when it is clear from
+the context.
+
+Figure~\ref{fig:lang_opsem} shows the operational semantic of the language. The operational semantic
+is pretty standard, so we will not extend the explanations unnecessarily.
 
 \subsection{Non-interference}%
 \label{subsec:ni}
 
-Non-interference: ``public outputs do not depend on secret inputs''.
-Knowledge of the attacker: what does an attacker learn from a public event.
-Given a public trace, public input and program, the attacker knowledge is the set of secret inputs
-that the attacker that are consistent with the trace of execution.
+The mantra of non-interference is that ``public outputs do not depend on secret inputs''.
+We will define formally this concept using the notion of \emph{attacker knowledge}. The attacker
+knowledge is the ability for an adversary to deduce the possible secret inputs. It characterizes
+what an attacker can learn by looking at the public outputs.
+More precisely, the attacker knowledge is the set of secret inputs that are consistent with the
+public execution trace. Thus, smaller is the set of possible inputs, bigger is the attacker
+knowledge.
 
-Progress-sensitive: public events does not give more knowledge to the attacker. In other words,
-at any step, the knowledge of the attacker is the same (it cannot narrow down the set of possible
-secret input).
+Formally, the attacker knowledge $K$ is defined by
+\[
+  K(P,~c,~\delta) \triangleq
+  \{ S ~|~ \exists \conf.\
+  \exectrans{(c,~S,~P,~m_{\mathrm{init}},~\varepsilon)}{\conf}
+  \wedge
+  \pproj{\tau} = \delta
+  \}
+\]
+where $\conf = (c',~S',~P',~m',~\tau)$ and $\pproj{\tau}$ is the projection of the public events of
+the trace $\tau$.
 
-Intuition ? Might be hard to enforce (why ?).
+Using this base definition, we can define a variant of NI called \emph{Progress Sensitive
+  Non-Interference} (PSNI).
+\begin{align*}
+  \mathrm{PSNI} &\triangleq \\
+  &(\exists c',~S',~P',~m',~\tau.\
+  \exectrans{(c,~S,~P,~m_{init},~\varepsilon)}{(c',~S',~P',~m',~\tau)}
+  \wedge
+  \pproj{\tau} = \delta) \\
+  &\Rightarrow
+  \ K(P,~c,~\alpha::\delta) = K(P,~c,~\delta)
+\end{align*}
+The intuition is that, if the adversary has already discover the public trace $\delta$ during the
+execution, discovering a new public event $\alpha$ does not provide more knowledge.
+In other words, at any step of computation, the knowledge of the attacker is the same, and it cannot
+narrow down the set of possible secret inputs.
+However, PSNI is hard to enforce because we need to know whether there will be a future event, and
+loops are a challenge in this task.
 
-Because PSNI is hard to enforce, we define Progress-Insensitive (PINI).
-
-Progress-knowledge:
-Given a public trace, public input and program, the attacker knowledge is the set of secret inputs
-that the attacker that are consistent with the trace of execution, if learning one more public
-event.
-Progress-insensitive: the attacker does not learn more by knowing the next public event.
-
-Intuition ? Why easier to enforce ?
-The attacker already knows in advance that there will be another event, but it doesn't know which
-one precisely. Knowing what the event is exactly does not give more knowledge.
+Because PSNI is hard to enforce, we define the \emph{Progress Insensitive Non-Interference} (PINI)
+variant. Intuitively, it allows the adversary to know that there will be a future public event, but
+when it eventually learns the exact event, it does not change its knowledge. In order to formally
+define this intuition, we first define the notion of \emph{progress knowledge} $K_{\rightarrow}$,
+which is a variant of the attacker knowledge with an additional (any) public event.
+\[
+  K_{\rightarrow}(P,~c,~\delta) \triangleq
+  \{ S ~|~ \exists \conf',\alpha.\
+  \exec{(c,~S,~P,~m_{\mathrm{init}},~\varepsilon)}{\conf'}
+  \wedge
+  \pproj{\tau'} = \alpha::\delta
+  \}
+\]
+The progress knowledge captures the set of secret inputs that are consistent with the execution $c$,
+the already known public trace $\delta$ and any additional public event $\alpha$.
+We can thus formally define PINI:
+\begin{align*}
+  \mathrm{PINI} &\triangleq \\
+  &(\exists c',~S',~P',~m',~\tau.\
+  \exectrans{(c,~S,~P,~m_{init},~\varepsilon)}{(c',~S',~P',~m',~\tau)}
+  \wedge
+  \pproj{\tau} = \alpha::\delta) \\
+  &\Rightarrow
+  \ K(P,~c,~\alpha::\delta) = K_{\rightarrow}(P,~c,~\delta)
+\end{align*}
+which indeed captures the fact that learning an additional event does not give more knowledge than
+knowing that a public event will arrive.
+PINI is easier to enforce than PSNI, because the attacker already knows in advance that there will
+be another event, but it does not know which one precisely. In some way, it does not get surprised
+by the upcoming event.
 
 \subsection{Type system}%
 \label{subsec:type_system}
+In this section, we define a flow sensitive type-system that enforces PINI.
 
-We define a type system that enforce PINI.
-The type system is flow sensitive.
-\instruction{ What does flow sensitive means ? }.
+The typing judgment for expression is fairly standard. \( \etyping{\ctx}{e}{\ell} \) means that
+the expression \( e \) has confidentiality level \( \ell \) in context \( \ctx \).
+Figure~\ref{fig:typing_expr} shows the typing rules for expressions. Any binary operations is typed
+with the join of the labels, even though it could be more precise (eg. the expression $x - x$ is
+always 0, so it could be public independently of $x$ being public or secret).
 
-\instruction{ What can we say that is interesting about the type system ? }.
+\input{figures/typing_expr.tex}
 
-\instruction{ Figure type system }.
+The typing judgment for the commands \( \typing{\ctx}{\pc}{c}{\ctx'} \), means that under the context
+\( \ctx \) and execution level \( \pc \), the command \( c \) modify the context to $\ctx'$.
+
+Figure~\ref{fig:typing_cmd} presents the typing rules for the commands.
+\input{figures/typing_cmd.tex}
+
+The type system captures the modifications of the typing context after the execution of the command.
+In particular, it captures the programs that change the security level of a variable. Because the
+observable events are the outputs of the public channel, the internal modifications of the memory are
+not observable right away. As such, the confidentiality level of the variables in memory can safely
+be modified.
+
+An interesting rule is the \textsc{While}. It allows to choose the final context $\ctx'$, that will
+be used to type both the expression and the body of the loop. This final context must flows from the
+initial context $\ctx$.
+$\ctx'$ captures the strictest context $\ctx'$, to type the expression and the
+body of the loop, as it has to be the same before and after body. In some way, it expresses some
+sort of a fixpoint over the possible typing-context for the body. It is also necessary to type the
+expression with the final context, as the type of the expression can depend on variables that are
+modified in the body.
+
+The rest of the typing rules are quite standard information-flow type system. Now that we have
+defined a type-system, we want to prove that it is non-trivial (it types interesting programs) and
+sound (it captures the wanted property). We refer the reader to the
+Appendix~\ref{sec:examples} for some examples of well-typed programs, and we show the soundness in
+the next section.
 
 \section{Soundness}%
 \label{sec:soundness}
 
-The soundness theorem states that the type system actually enforce PINI. In other words, it formally
-states that any well-typed program is PINI.
+The soundness theorem says that the type system enforces PINI. In other words, it formally states
+that any well-typed program is PINI.
 
-\instruction{ Fill the section depending on the approach }
+But first, let us define two notions that relate memories and context.
+
+We say that a memory $m$ is well-formed wrt. a context $\ctx$, if all the variables defined in $m$
+are also defined in $\ctx$, ie. $\forall x \in m \Rightarrow x \in \ctx$.
+
+We say that a two memories $m_{1}$ and $m_{2}$ agree on the public variables wrt. a context $\ctx$,
+if all the variables defined as public in $\ctx$ are the same in $m_{1}$ and $m_{2}$. We note
+$\agree{\ctx}{m_{1}}{m_{2}}$.
 
 \subsection{Approach}%
 \label{subsec:approach}
 
-In order to prove the theorem, we follow and adapt the approach of (information flow lecture notes).
+In order to prove the theorem, we follow a similar approach than the one in (information flow
+lecture notes).
 
-Definition of an augmented language, that explicitly specify when we reach a join point. Definition
-of the semantic for the augmented language, that keep track of the type with the typing environment.
+First, we define an auxiliary, augmented language, that explicitly specify when we reach a join
+point. Then, we define its semantic, that keeps track of the type with the typing environment and
+the current security level.
 
-We have a correspondence between the original language and the augmented syntax, and we show that
-the semantic are equivalent.
+Then, we show that this auxiliary language is somewhat equivalent to the original language, in the
+sense that there is a correspondence between them. As such, we can reason on the auxiliary language,
+and reflect the result on the original one with an adequacy theorem.
 
-Then we define a bridge relation, in order to reason about the transitions that emits a public
-event.
-The bridge relation reduces a state until it reaches either a terminal state, or emits a public
-event.
+Finally, the main proof remains on a bridge relation, that allows to reason precisely on the
+transitions emitting a public event.
 
-\instruction{ Preservation of well-formedness ?? }
 \subsection{Auxiliary language}%
 \label{subsec:aux_lang}
 
-The syntax of the auxiliary language is the following.
-\instruction{figure syntax auxiliary}
+% Syntax and opsem
+The syntax of the auxiliary language is similar to the WHILE language, but adds the following
+command explicit \emph{join}. The Join\footnotemark[1] needs to be explicit in order to reason about
+the security level of the pc when leaving a if-then-else branch.
 
-The auxiliary language simply adds an explicit command \emph{join} in order to reason about the
-security level of the pc when leaving a if-then-else statement.
-\instruction{ Why do we need an explicit join ? }
 
-The operational semantic carries along the typing context, which associate a security level to the
-variables in the memory and to the pc.
-We use a vector of security labels to represent the pc.
+\[ \mathit{cmd}~::=~\cdots~|~\mathrm{Join} \]
 
-\instruction{figure opsem auxiliary}
+The operational semantic carries along the typing context, which associates a security level to the
+variables in the memory and to the pc. In order to reason about the join points, we need to remember
+the history of the previous pc: as such, the pc is actually a list security labels, where the head
+is the current security level.
 
-At every control-flow branch, we add the security label of the condition expression to the pc
-vector. As such, the current pc label is on top of the vector. When reaching a join, we remove the
-last pc from the vector. If the vector is empty, then the pc is public.
+The relation \(\execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf_{f}}{\ctx_{f}}{\lpc_{f}} \)
+states that the configuration $\conf$, with the typing context $\ctx$, at the current security level
+$\lpc$ steps to the configuration $\conf_{f}$, with the new typing context $\ctx_{f}$ and the new
+security level $\lpc_{f}$, and emits the event $\alpha$. The emitted event can be empty.
 
-\instruction{ Why do we need to proceed this way ? }
+The main feature of the operational semantic is the management of the pc: at every conditional
+branch, the history is incremented with the security label of the condition expression to the pc.
+When reaching a Join instruction, the last pc in the history is popped. If the history is empty,
+then the pc is public.
 
-We define a transformation that establishes an equivalence between the original language and the
-auxiliary language.
-The transformation from the auxiliary language to the original language consists on erasing the join
-instructions.
+\footnotetext[1]{
+  In the Coq development, the Join takes a command as an argument. In the operational semantic,
+  $\mathrm{Join}\ c$ reduces to $c$, while it reduces to $\mathrm{Skip}$ in this case. The reason is
+  that it simplifies the adequacy theorem, as there is a one-to-one correspondence between each
+  steps. In fine, the two definition are equivalent.
+}
 
-The adequacy of the auxiliary language establishes that it is equivalent to the original language.
-% From the original language, an if-then-else instruction becomes a sequence of if-then-else ; join.
+Moreover, the language of events is enriched with a Write event, that is emitted at every
+assignment of a public expression. We need to enrich the events because we need to keep track of the
+modifications in memory. The full operational semantic rules are available
+Figure~\ref{fig:lang_aux_opsem}.
 
-\subsection{Bridge relation}%
+We also define a typing judgment for the auxiliary language, which refines the typing judgment of
+the original language.
+First, the typing judgment captures the pc after the execution of the command. Then, as the pc
+is now an history of pc, all conditions over the pc takes the join of the history. The operation are
+thus lifted to the history of pc.
+Moreover, the typing rules for the auxiliary language are more relax than
+the one for \whilelang, as it allows to chose a final typing context $\ctx'$ that flows from the
+starting typing context $\ctx$.
+
+The typing system is also extended with a rule for the join, which captures the fact that a Join
+leaves the current security level by removing the head pc of the history.
+
+\[
+    \inferH{Join}
+    {\typingaux{\ctx}{\lpc}{c}{\ctx'}{\pc::\lpc'}}
+    {\typingaux{\ctx}{\lpc}{\mathrm{Join}~c}{\ctx'}{\lpc'}}
+  \]
+
+The full typing rules are available Figure~\ref{fig:typing_aux}.
+
+The auxiliary language and type-system enjoy some interesting properties that are detailed in the
+remaining of this section.
+
+% Preservation
+The preservation lemma states that if a well-typed term takes a step, then the resulting term is
+well-typed, under the (potentially) new typing context.
+
+\begin{lemma}[Preservation]\label{thm:preservation}
+  Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
+  $\conf' \triangleq (c',~S',~P',~m',~\tau')$ be configurations.
+  Let further suppose:
+  \begin{itemize}
+    \item $m$ be well-formed memory wrt. $\ctx$
+    \item $\typingaux{\ctx}{\lpc}{c}{\ctx_{f}}{\lpc_{f}}$
+    \item \( \execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf'}{\ctx'}{\lpc'} \)
+  \end{itemize}
+
+  Then, $m'$ is well-formed wrt. $\ctx'$, and the command $c'$ is also well-typed
+  $\typingaux{\ctx'}{\lpc'}{c'}{\ctx_{f}}{\lpc_{f}}$.
+\end{lemma}
+
+% Adequacy wrt. the WHILE language
+In order to establish an equivalence between the original language and the auxiliary language, we
+define a transformation from the auxiliary language to the original language, which consists on
+erasing the join command; and a transformation from the original language to the original language,
+which consists on adding the join command after every if-then-else.
+We denote the transformation from a command $c$ in \whilelang to the auxiliary language
+$\compile{c}$.
+
+The equivalence between the two languages are reflected via the two following adequacy theorems:
+
+\begin{lemma}[Adequacy auxiliary typing]
+  For any $\ctx$, $\pc$, $c$ and $\ctx_{f}$,
+  \[
+  \typing{\ctx}{\pc}{c}{\ctx_{f}}
+  \Leftrightarrow
+    \typingaux{\ctx}{\lpc}{c}{\ctx_{f}}{\lpc}
+  \]
+
+  where $\pc$ is lifted to $\lpc$.
+\end{lemma}
+
+The adequacy of the auxiliary typing establishes that the transformation from one language to
+another preserves the typing judgment for the corresponding language.
+
+\begin{lemma}[Adequacy auxiliary language]
+  Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
+  $\conf' \triangleq (c',~S',~P',~m',~\tau')$ be configurations.
+  Let suppose:
+  \begin{itemize}
+    \item $m$ be well-formed memory wrt. $\ctx$
+    \item $\typing{\ctx}{\pc}{c}{\ctx_{f}}$
+    \item $\exec{\conf}{\conf'}$
+  \end{itemize}
+
+  Then, it exists $j'$, $\ctx'$, $\lpc'$ and $\alpha$ such that
+
+  \( \execaux{\conf}{\ctx}{\lpc}{\alpha}{\conf'}{\ctx'}{\lpc'} \),
+
+  where $\pc$ is lifted to $\lpc$, the configuration $\conf$ uses the transformation of the command,
+  and the resulting command $j'$ of configuration $\conf'$ is the transformation of the command $c'$.
+\end{lemma}
+
+The adequacy of the auxiliary language establishes that, if the memory is well-formed, the
+command is well-typed in the original language, and takes a step, then we can also take a similar
+step in the auxiliary language.
+
+In the following diagram, the adequacy lemma states that $j'$ is the compilation of $c'$:
+\begin{tikzcd}
+\compile(c) \arrow[r]  & j'                   \\
+c \arrow[u] \arrow[r] & c' \arrow[u, dashed]
+\end{tikzcd}
+
+The auxiliary language allows us to reason on an equivalent language to \whilelang, but which
+carries over more information. However, we still need to reason in a higher level of abstraction to
+prove the soundness of the system.
+
+\subsection{Bridge relations}%
 \label{subsec:brigde_rel}
+
+The main hurdle in the proof is that some step do not emit any event, which makes these steps
+irrelevant regarding the definition of the knowledge. As such, we want a relation that skips the
+irrelevant steps, and allows us to reason on the steps emitting a public event only.
+We call this kind of relations the \emph{bridging relations}.
+
+We define multiple kind of bridging relations, that relates two states in different ways, depending
+of the kind of public events.
+
+\begin{itemize}
+  \item Basic-bridge relation (\emph{basic\_bridge} in the Coq development):
+        two states basic-bridge in n steps, if they take n-1 steps without emitting any public
+        event, and then take any public event.
+  \item Write-bridge relation (\emph{write\_bridge} in the Coq development):
+        two states write-bridge in n steps, if they take n-1 steps without emitting any public
+        event, and then take a write public event.
+  \item Silent-bridge relation (\emph{silent\_bridge} in the Coq development):
+        two states silent-bridge in n steps, if they take n steps without emitting
+\end{itemize}
+
+We define the transitive closure for the write-bridge relation. One may notice that it cannot be
+reflexive, as it imposes at least one step emitting a write event.
+
+The bridge relation (\emph{bridge} in the Coq development) is our main bridging relation. There is
+two different ways for two states to bridge:
+first, the starting state takes any number of basic-bridges, then it takes one basic-bridge that do
+not emit a write-event, then any number of write-bridge, and finally any number of silent-bridges;
+the second way is to take any number of write-bridge, and then any number of silent-bridges.
+
+Figure~\ref{fig:bridge_relation} shows these two different ways to bridge, where $b$ stands for
+basic-bridge, $bnw$ for basic-bridge non-write, $wb$ for write-bridge and $sb$ for silent-bridge.
+The adequacy allows one to move from the original language to the auxiliary one, and the other way around.
+
+% Motivation for all the relations
+The different bridge relations allows us to decompose any pack of steps by the kind of events, and
+to know precisely what is synchronized or not each time.
+\instruction{a bit more motivations: the first path actually change the trace, while the 2nd one not
+really, as it only perform public writes}
+
+We can derive two main theorems: an adequacy theorem and an agreement theorem.
+\begin{theorem}[Bridge adequacy]\label{thm:adequacy}
+  Let $\conf \triangleq (c,~S,~P,~\tau)$ and $\conf' \triangleq (c',~S',~P',~\tau')$ be two
+  configurations of \whilelang, $\ctx$ and $\ctx'$ be resp. an initial and final context,
+  and $\pc$ be an initial pc.
+  Let further suppose that
+
+ \begin{itemize}
+   \item $m$ be a well-formed memory wrt. $\ctx$,
+   \item \(\typing{\ctx}{\pc}{c}{\ctx'} \)
+   \item \( \execn{\conf}{n}{\conf'} \)
+ \end{itemize}
+
+  Then, it exists $j$ and $\tau_{f}$ such that \( \bridge{c}{\tau_{f}}{j} \), $c' = \compile{j}$ and
+  $\tau_{f} \setminus \mathrm{Write} = \tau'$.
+\end{theorem}
+\instruction{overview of the proofs ?}
+
+In other words, the \emph{bridge adequacy} theorem states that if a command is well-typed, and takes
+any number of steps, then its auxiliary counterpart bridges to a state that is the compilation of
+the final state and that records exactly the public trace.
+% \instruction{I'm not happy with this explanation, find a better formulation}
+
+This theorem then allows to reason on the bridge relation rather than on the operational semantic.
+The bridge relation decomposes the steps by focusing only on the emitted public events, and gives
+some more information about the states that are synchronized (or not).
+Figure~\ref{fig:bridge_relation} draws the adequacy.
+
+\input{figures/bridge_relation.tex}
+
+\begin{theorem}[Bridge agree]\label{thm:agree}
+
+  Assume
+  \begin{itemize}
+    \item $\agree{\ctx}{m_{1}}{m_{2}}$
+    \item $\typing{\ctx}{\pc}{c}{\ctx_{f}}$
+    \item $\pproj{\tau_{1}} = \pproj{\tau_{2}}$
+    \item $\bridge{(c,~S_{1},~P,~m_{1},~\tau_{1})}{n_{1}}(c_{1}',~S_{1}',~P_{1}',~m_{1}',~\tau_{1}')$
+    \item $\bridge{(c,~S_{2},~P,~m_{2},~\tau_{2})}{n_{2}}(c_{2}',~S_{2}',~P_{2}',~m_{2}',~\tau_{2}')$
+    \item $\mathrm{len}(\pproj{\tau_{1}'}) = \mathrm{len}(\pproj{\tau_{2}'})$
+  \end{itemize}
+
+  Then,
+  the final commands are the same $c_{1}' = c_{2}'$,
+  the memories agree on the public variables $\agree{\ctx_{f}}{m_{1}}{m_{2}}$, % is this true ???
+  and the public traces are the same $\pproj{\tau_{1}'} = \pproj{\tau_{2}'}$
+\end{theorem}
+
+The theorem can be split in 3 lemmas: basic-bridge agree, write-bridge agree, and silent-bridge
+agree.
+
+Silent-bridge agree states that in-between two silent bridge of two executions,
+the memory agree on public, public input are the same and the public
+traces are the same for both execution. It holds because silent-bridge relates states that do not
+emit any public events: the traces don't change, and the public part of the memory don't change
+either.
+
+Write-bridge agree states that in-between two write-bridges of two executions,
+the public traces are the same for both execution. It holds because write-bridge relates states that
+do not emit only write-events, which means that memories might not agree on the public anymore, but
+they do not emit any visible events in the trace.
+
+Basic-bridge is the main lemma: it states that in-between two basic-bridges of two executions of
+same length, the final command is the same, the final memory agree on public, and
+public traces are the same for both execution.
+It holds because \instruction{fill in}.
+
+\instruction{overview of the proofs ?}
 
 \subsection{Main theorem}%
 \label{subsec:main_theorem}
 
-Composition of the lemma that leads to the soundness theorem.
+The soundness theorem mainly relies on the following theorem. It states that for
+any pair of configurations that agree on public of the memory, agree on the public events,
+that start with a well-typed command, and both step into a configuration that produces a
+public trace of the same length actually produces the same public trace.
 
-\section{Conclusion}%
+\begin{theorem}[Well-typed execution agree]\label{thm:sound}
+
+Suppose that
+
+\begin{enumerate}
+  \item $m_{1}$ and $m_{2}$ are well-formed wrt. $\ctx$
+  \item $\agree{\ctx}{m_{1}}{m_{2}}$
+  \item \( \typing{\ctx}{\mathrm{Public}}{c}{\ctx_{f}}\)
+  \item $\pproj{\tau_{1}} = \pproj{\tau_{2}}$
+  \item \(
+        \exectrans
+        {(c,~S_{1},~P,~m_{1},~\tau_{1})}
+        {(c,~S_{1}',~P_{1}',~m_{1}',~\tau_{1}')}
+        \)
+  \item \(
+        \exectrans
+        {(c,~S_{2},~P,~m_{2},~\tau_{2})}
+        {(c,~S_{2}',~P_{2}',~m_{2}',~\tau_{2}')}
+        \)
+  \item $\mathrm{len}(\pproj{\tau_{1}'}) = \mathrm{len}(\pproj{\tau_{2}'})$
+\end{enumerate}
+
+Then $\pproj{\tau_{1}'} = \pproj{\tau_{2}'}$.
+\end{theorem}
+
+
+\begin{proof} (Sketch)
+
+  The proof of this theorem is in essence a composition of the previous theorems. The main idea is
+  that, using the Theorem~\ref{thm:adequacy} in the hypotheses 5 and 6, we can reason at the level
+  of the bridge relation, rather than at the level of the operational semantic itself.
+  Then, using Theorem~\ref{thm:agree}, we know that the emitted public traces are the same in both
+  executions.
+
+\end{proof}
+
+Finally, we can define the soundness theorem that state that any well-typed command is PINI.
+
+\begin{theorem}[Soundness type-system]
+  \( \forall c, \ctx.\
+  \typing{\emptyset}{\mathrm{Public}}{c}{\ctx}
+  \Rightarrow \pini{c}
+  \)
+\end{theorem}
+
+\begin{proof} (Sketch)
+
+  Let $c$ be a command and $\ctx$ be a context. Assume that $c$ is well-typed under the empty
+  context, changing it to $\ctx$.
+
+  By unfolding the definition of PINI, we assume a public stream $P$, an already known trace
+  $\delta$ and any public event $\alpha$. We also assume that we have a first execution of the
+  program with some secret input stream $S_{1}$, which produces a trace $\tau_{1}$ such that
+  $\pproj{\tau_{1}} = \alpha::\delta$.
+  \instruction{double check that I'm not wrong}
+
+  We need to prove \(K(P,~c,~\alpha::\delta) = K_{\rightarrow}(P,~c,~\delta) \).
+  The left-to-right direction is almost trivial, as we already know the next event $\alpha$.
+  The right-to-left direction is the hard one. By unfolding the definition, we get that
+  the second execution emits a trace $ \pproj{\tau_{2}} = \alpha_{2} :: \delta$.
+  The proof thus mainly relies on the fact that $\pproj{\tau_{1}}= \pproj{\tau_{2}}$.
+
+  Using the Theorem \ref{thm:sound}, all the condition are met, and we can conclude the proof.
+
+\end{proof}
+
+
+\section{Limits and conclusion}%
 \label{sec:conclusion}
 
-We have defined a type-system for PINI. Mechanized the proof of soundness in Coq.
-What next ?
+We have formalized the type-system in Coq, but the formalization does not include the whole report.
 
+\paragraph{Incomplete type-system}
+The type-system that we defined actually does not include the typing rule for the While
+command.
+The main reason is that, to prove the \emph{preservation lemma}~\ref{thm:preservation}, we need an
+intermediate lemma\footnotemark[2] stating that, for all well-typed command, (1) the starting typing
+context can flows from a more relaxed typing context and (2) the ending typing context can flows to
+a stricter typing context. This is required, for instance, to prove the If case, where the exit
+context is flows from the two inductive cases (as it is a join).
+However, the aforementioned lemma seems to not be true in the case of While. Indeed, the inductive
+case gives a typing context that is more relaxed than the typing context used for the body of the
+loop, but it has not necessarily any relation with the typing context of the While.
+\footnotetext[2]{In the Coq development, the lemma is named typecheck\_flow\_gen}
+
+\paragraph{Incomplete proof}
+Even without the While typing rule, we actually didn't manage to terminate the proof.
+The admitted lemmas are the following:
+\instruction{list the admitted lemmas}
+Although we didn't prove them, we have good reason to believe that we could have go through the
+whole proof if we had more time to complete them. The Coq implementation explains in the comment why
+we think that the missing lemmas are provable.
+
+\paragraph{Conclusion}
+In this work, we design a type-system for the \whilelang that captures PINI.
+The type-system is mechanized in Coq, as well as its proof of soundness.
+
+\appendix
+
+\section{Examples}%
+\label{sec:examples}
+
+In this section, we present some interesting program that are well-typed according to the
+type-system presented in Figure~\ref{fig:typing_cmd}.
+
+\paragraph{Motivating While}
+The following example motivates the while rule, with final context that flows from the initial
+context. In particular, the initial context at the beginning of the loop is
+$\ctx = \{ x \mapsto \public,\ y \mapsto \public \}$, whereas the final context, when leaving the
+loop, is $\ctx' = \{ x \mapsto \secret,\ y \mapsto \public \}$. In particular, we remark that after
+unrolling the loop once, $x$ is secret, which change the pc of the body from public to secret.
+\begin{Verbatim}[samepage=true]
+input(public, x) ;
+input(public, y) ;
+while x:
+do
+   input(secret, x);
+done
+output(public, y);
+\end{Verbatim}
+\instruction{Another examples}
+
+\section{Operational Semantic \whilelang}%
+\input{figures/lang_opsem}
+
+
+
+\section{Auxilliary language formalization}%
+\input{figures/lang_aux_opsem}
+\input{figures/typing_aux}
 
 %% References
 %% - Edit literature.bib to add references
 %%
-\bibliographystyle{abbrvnat}
-\bibliography{literature}
-
+% \bibliographystyle{abbrvnat}
+% \bibliography{literature}
 
 \end{document}

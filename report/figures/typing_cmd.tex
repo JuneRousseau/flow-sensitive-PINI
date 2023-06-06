@@ -1,0 +1,66 @@
+\begin{figure}[ht]
+  \centering
+ \begin{mathparpagebreakable}
+    \inferH{Skip} { }
+    {\typing{\ctx}{\pc}{\mathrm{Skip}}{\ctx}}
+    \and
+
+    \inferH{Assign}
+    { \etyping{\ctx}{e}{ \ell } \and
+    }
+    {\typing{\ctx}{\pc}{\mathrm{Assign}~x~e}{(x:\join{\ell}{\pc})::\ctx}}
+    \and
+
+    \inferH{Seq}
+    {
+      \typing{\ctx_{1}}{\pc}{c_{1}}{\ctx_{2}} \and
+      \typing{\ctx_{2}}{\pc}{c_{2}}{\ctx_{3}}
+    }
+    {\typing{\ctx_{1}}{\pc}{c_{1};c_{2}}{\ctx_{3}}}
+    \and
+
+    \inferH{If}
+    { \etyping{\ctx}{e}{ \ell } \and
+      \typing{\ctx}{\join{\pc}{\ell}}{c_{1}}{\ctx_{1}} \and
+      \typing{\ctx}{\join{\pc}{\ell}}{c_{2}}{\ctx_{2}} \and
+    }
+    {\typing{\ctx}{\pc}{\mathrm{If}~e~c_{1}~c_{2}}{\join{\ctx_{1}}{\ctx_{2}}}}
+    \and
+
+    \inferH{While}
+    { \flowsto{\ctx}{\ctx'} \and
+      \etyping{\ctx'}{e}{ \ell } \and
+      \typing{\ctx'}{\join{\pc}{\ell}}{c}{\ctx'}
+    }
+    {\typing{\ctx}{\pc}{\mathrm{While}~e~c}{\ctx'}}
+    \and
+
+    \inferH{Input}
+    { \flowsto{\pc}{ch} }
+    {\typing{\ctx}{\pc}{\mathrm{Input}~ch~x}{(x:\join{\ell}{\pc})::\ctx}}
+    \and
+
+    \inferH{Output}
+    { \etyping{\ctx}{e}{\ell} \and
+      \flowsto{\join
+        {\pc}{\ell}}{ch}}
+    {\typing{\ctx}{\pc}{\mathrm{Output}~ch~e}{\ctx}}
+ \end{mathparpagebreakable}
+  \caption{\label{fig:typing_cmd} Typing rules for commands }
+\end{figure}
+
+
+    % \inferH{While1}
+    % { \etyping{\ctx}{e}{ \ell } \and
+    %   \typing{\ctx}{\join{\pc}{\ell}}{c}{\ctx}
+    % }
+    % {\typing{\ctx}{\pc}{\mathrm{While}~e~c}{\ctx}}
+    % \and
+
+    % \inferH{While2}
+    % { \etyping{\ctx}{e}{ \ell } \and
+    %   \typing{\ctx}{\join{\pc}{\ell}}{c}{\ctx''} \and
+    %   \typing{\ctx''}{\join{\pc}{\ell}}{c}{\ctx'}
+    % }
+    % {\typing{\ctx}{\pc}{\mathrm{While}~e~c}{\ctx'}}
+    % \and

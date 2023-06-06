@@ -1,0 +1,152 @@
+\begin{figure}[ht]
+  \centering
+  \begin{mathparpagebreakable}
+    \inferH{Skip}
+    { }
+    {
+      \execaux
+      {(\mathrm{Skip},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\varepsilon}
+      {(\mathrm{stop},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+    }
+    \and
+
+    \inferH{Assign}
+    {
+      \langle e, m \rangle \Downarrow v \and
+      \etyping{\ctx}{e}{\ell} \and
+      \alpha = \mathrm{(if\ \ell = LPublic\ then\ Write(x,v)\ else\ \varepsilon)}
+    }
+    {
+      \execaux
+      {(\mathrm{Assign}~x~e,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      { \alpha }
+      {(\mathrm{stop},~S,~P,~m,~\tau)}{\ctx[x \mapsto (\join{\lpc}{\ell})]}{\lpc}
+    }
+    \and
+
+    \inferH{Seq-1}
+    {
+      \execaux
+      {(c_{1},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {(c_{1}',~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+      \and
+      c_{1} \neq \mathrm{stop}
+    }
+    {
+      \execaux
+      {(c_{1};;c_{2},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {(c_{1}';;c_{2},~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+    }
+    \and
+
+    \inferH{Seq-2}
+    {
+      \execaux
+      {(c_{1},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {(\mathrm{stop},~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+    }
+    {
+      \execaux
+      {(c_{1};;c_{2},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {c_{2},~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+    }
+    \and
+
+    \inferH{If}
+    {
+      \langle e, m \rangle \Downarrow v \and
+      \etyping{\ctx}{e}{\ell} \and
+      i = (\mathrm{if\ v \neq 0\ then\ 1\ else\ 2)}
+    }
+    {
+      \execaux{(\mathrm{If}~e~c_{1}~c_{2},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\varepsilon}
+      {(c_{i},~S,~P,~m,~\tau)}{\ctx'}{\lpc'}
+    }
+    \and
+
+    \inferH{Join-1}
+    {
+      \execaux{(c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {(c',~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+      \and
+      c' \neq \mathrm{stop}
+    }
+    {
+      \execaux{(\mathrm{Join}~c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {(\mathrm{Join}~c',~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+    }
+    \and
+
+    \inferH{Join-2}
+    {
+      \execaux{(c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {(\mathrm{stop},~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+    }
+    {
+      \execaux{(\mathrm{Join}~c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\alpha}
+      {(\mathrm{stop},~S',~P',~m',~\tau')}{\ctx'}{\lpc'}
+    }
+    \and
+
+
+    \inferH{While}
+    { }
+    {
+      \execaux{(\mathrm{While}~e~c,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {\varepsilon}
+      {(\mathrm{If}~e~(c;;{While}~e~c)~\mathrm{Skip},~S,~P,~m,~\tau)}{\ctx}{\lpc}
+    }
+    \and
+
+    \inferH{Input-Public}
+    {
+      \ctx' = \ctx[ x \mapsto \lpc ] \and
+      \tau' = (\mathrm{Input}(v, \mathrm{public}))::\tau
+    }
+    {
+      \execaux{(\mathrm{Input}~\mathrm{Public}~x,~S,~(v :: P),~m,~\tau)}{\ctx}{\lpc}
+      {\mathrm{Input v}}
+      {(\mathrm{stop},~S,~P,~m[ x \mapsto v ],~\tau')}{\ctx'}{\lpc}
+    }
+    \and
+
+    \inferH{Input-Secret}
+    {
+      \ctx' = \ctx[ x \mapsto \secret ] \and
+      \tau' = (\mathrm{Input}(v, \mathrm{secret}))::\tau
+    }
+    {
+      \execaux{(\mathrm{Input}~\mathrm{Secret}~x,~(v :: S),~P,~m,~\tau)}{\ctx}{\lpc}
+      {\varepsilon}
+      {(\mathrm{stop},~S,~P,~m[ x \mapsto v ],~\tau')}{\ctx'}{\lpc}
+    }
+    \and
+
+    \inferH{Output}
+    {
+      \langle e, m \rangle \Downarrow v \and
+      \etyping{\ctx}{e}{\ell} \and
+      \flowsto{\join{\lpc}{\ell}}{ch} \and
+      \alpha = \mathrm{Output}(v, ch) \and
+      ev = \mathrm{(if\ ch = Public\ then\ \alpha\ else\ \varepsilon)}
+    }
+    {
+      \execaux{(\mathrm{Output}~ch~x,~S,~P,~m,~\tau)}{\ctx}{\lpc}
+      {ev}
+      {(\mathrm{stop},~S,~P,~m,~\alpha::\tau)}{\ctx}{\lpc}
+    }
+
+  \end{mathparpagebreakable}
+
+  \caption{\label{fig:lang_aux_opsem} Operational semantic of the auxiliary language}
+\end{figure}

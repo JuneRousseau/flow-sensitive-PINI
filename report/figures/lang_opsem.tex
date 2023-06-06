@@ -1,0 +1,82 @@
+\begin{figure}[ht]
+
+  \centering
+ \begin{mathparpagebreakable}
+    \inferH{Expr-Lit} { }
+    {\langle n, m \rangle \Downarrow n}
+    \and
+
+    \inferH{Expr-Var}
+    {m(x) = v}
+    {\langle x, m \rangle \Downarrow v}
+    \and
+
+    \inferH{Expr-BinOp}
+    { \langle e_{1}, m \rangle \Downarrow v_{1} \and
+      \langle e_{2}, m \rangle \Downarrow v_{2} \and
+    }
+    {\langle e_{1} \oplus e_{2}, m \rangle \Downarrow v_{1} \oplus v_{2}}
+    \and
+
+
+    \inferH{Skip}
+    { }
+    { \exec{(\mathrm{Skip},~S,~P,~m,~\tau)}{(\mathrm{stop},~S,~P,~m,~\tau)} }
+    \and
+
+    \inferH{Assign}
+    { \langle e, m \rangle \Downarrow v }
+    { \exec{(\mathrm{Assign}~x~e,~S,~P,~m,~\tau)}{(\mathrm{stop},~S,~P,~m[x \mapsto v],~\tau)} }
+    \and
+
+    \inferH{Seq1}
+    {
+      \exec{(c_{1},~S,~P,~m,~\tau)}{(c_{1}',~S',~P',~m',~\tau')}
+      \and
+      c_{1} \neq \mathrm{stop}
+    }
+    {\exec{(c_{1};;c_{2},~S,~P,~m,~\tau)}{(c_{1}';;c_{2},~S',~P',~m',~\tau')}}
+    \and
+
+    \inferH{Seq2}
+    {
+      \exec{(c_{1},~S,~P,~m,~\tau)}{(\mathrm{stop},~S',~P',~m',~\tau')}
+    }
+    {\exec{(c_{1};;c_{2},~S,~P,~m,~\tau)}{(c_{2},~S',~P',~m',~\tau')}}
+    \and
+
+    \inferH{If}
+    { \langle e, m \rangle \Downarrow v
+      \and
+      i = (\mathrm{if\ v \neq 0\ then\ 1\ else\ 2)}
+    }
+    {\exec{(\mathrm{If}~e~c_{1}~c_{2},~S,~P,~m,~\tau)}{(c_{i},~S,~P,~m,~\tau)}}
+    \and
+
+    \inferH{While}
+    { }
+    {\exec{(\mathrm{While}~e~c,~S,~P,~m,~\tau)}
+      {(\mathrm{If}~e~(c;;{While}~e~c)~\mathrm{Skip},~S,~P,~m,~\tau)}}
+    \and
+
+    \inferH{Input-Public}
+    { P = v :: P' }
+    {\exec{(\mathrm{Input}~\mathrm{Public}~x,~S,~P,~m,~\tau)}
+      {(\mathrm{stop},~S,~P',~m[ x \mapsto v ],~(\mathrm{Input}(v, \mathrm{public}))::\tau)}}
+    \and
+
+    \inferH{Input-Secret}
+    { S = v :: S' }
+    {\exec{(\mathrm{Input}~\mathrm{Secret}~x,~S,~P,~m,~\tau)}
+      {(\mathrm{stop},~S',~P,~m[ x \mapsto v ],~(\mathrm{Input}(v, \mathrm{secret}))::\tau)}}
+    \and
+
+
+    \inferH{Output}
+    { \langle e, m \rangle \Downarrow v }
+    {\exec{(\mathrm{Output}~ch~x,~S,~P,~m,~\tau)}
+      {(\mathrm{stop},~S,~P,~m,~(\mathrm{Output}(v, ch))::\tau)}}
+ \end{mathparpagebreakable}
+
+\caption{\label{fig:lang_opsem} Operational semantic of \whilelang}
+\end{figure}
