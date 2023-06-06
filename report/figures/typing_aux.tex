@@ -1,0 +1,67 @@
+\begin{figure}[ht]
+  \centering
+ \begin{mathparpagebreakable}
+   \inferH{Skip}
+   { \flowsto{\ctx}{\ctx_{f}} \and \flowsto{\lpc}{\lpc_{f}} }
+   { \typingaux{\ctx}{\lpc}{\mathrm{Skip}}{\ctx_{f}}{\lpc_{f}} }
+   \and
+
+    \inferH{Assign}
+    { \etyping{\ctx}{e}{ \ell}
+      \and
+      \flowsto{\ctx[x \mapsto \join{\lpc}{\ell}]}{\ctx_{f}}
+      \and \flowsto{\lpc}{\lpc_{f}}
+    }
+    { \typingaux{\ctx}{\lpc}{\mathrm{Assign}~x~e}{\ctx_{f}}{\lpc_{f}} }
+    \and
+
+    \inferH{Seq}
+    {
+      \typingaux{\ctx_{1}}{\pc}{c_{1}}{\ctx_{2}} \and
+      \typingaux{\ctx_{2}}{\pc}{c_{2}}{\ctx_{3}}
+    }
+    { \typingaux{\ctx_{1}}{\lpc}{c_{1};;c_{2}}{\ctx_{3}}{\lpc_{f}} }
+    \and
+
+    \inferH{If}
+    { \etyping{\ctx}{e}{ \ell } \and
+      \typingaux{\ctx}{\ell :: \lpc }{c_{1}}{\ctx_{1}}{\lpc_{1}} \and
+      \typingaux{\ctx}{\ell :: \lpc }{c_{2}}{\ctx_{2}}{\lpc_{2}} \and
+    }
+    { \typingaux{\ctx}{\lpc}{\mathrm{If}~e~c_{1}~c_{2}}
+      {\join{\ctx_{1}}{\ctx_{2}}}
+      {\join{\lpc_{1}}{\lpc_{2}}} }
+    \and
+
+    \inferH{While}
+    { \flowsto{\ctx}{\ctx_{f}} \and
+      \flowsto{\lpc}{\lpc_{f}} \and
+      \etyping{\ctx_{f}}{e}{ \ell } \and
+      \typingaux{\ctx_{f}}{\ell :: \pc}{c}{\ctx_{f}}{\lpc_{f}}
+    }
+    { \typingaux{\ctx}{\lpc}{\mathrm{While}~e~c}{\ctx_{f}}{\lpc_{f}} }
+    \and
+
+    \inferH{Input}
+    { \flowsto{\lpc}{ch} \and
+      \flowsto{\lpc}{\lpc_{f}} \and
+      \flowsto{\ctx[ x \mapsto \join{\lpc}{ch}]}{\ctx_{f}}
+    }
+    { \typingaux{\ctx}{\lpc}{\mathrm{Input}~ch~x}{\ctx_{f}}{\lpc_{f}} }
+    \and
+
+    \inferH{Output}
+    { \etyping{\ctx}{e}{\ell} \and
+      \flowsto{\ell::\pc}{ch} \and
+      \flowsto{\ctx}{\ctx_{f}} \and
+      \flowsto{\lpc}{\lpc_{f}}
+    }
+    { \typingaux{\ctx}{\lpc}{\mathrm{Output}~ch~e}{\ctx_{f}}{\lpc_{f}} }
+    \and
+
+    \inferH{Join}
+    { \typingaux{\ctx}{\lpc}{c}{\ctx_{f}}{\ell::\lpc_{f}} }
+    { \typingaux{\ctx}{\lpc}{\mathrm{Join}~c}{\ctx_{f}}{\lpc_{f}} }
+ \end{mathparpagebreakable}
+  \caption{\label{fig:typing_aux} Typing rules for the auxiliary language }
+\end{figure}
