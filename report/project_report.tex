@@ -45,7 +45,6 @@
 \newcommand{\compile}[1]{ #1 \downarrow }
 
 \newcommand{\join}[2]{#1 \sqcup #2}
-\newcommand{\joinc}[3][\pc]{#2 \sqcup #3}
 \newcommand{\flowsto}[2]{#1 \sqsubseteq #2}
 \newcommand{\etyping}[3]{ #1 \vdash #2 : #3}
 \newcommand{\pini}[1]{\mathrm{PINI}(#1)}
@@ -355,7 +354,7 @@ The auxiliary language and type-system enjoy some interesting properties.
 The preservation lemma states that if a well-typed term takes a step, then the resulting term is
 well-typed, under the (potentially) new typing context.
 
-\begin{lemma}[Preservation]
+\begin{lemma}[Preservation]\label{thm:preservation}
   Let $\conf \triangleq (c,~S,~P,~m,~\tau)$ and
   $\conf' \triangleq (c',~S',~P',~m',~\tau')$ be configurations.
   Let further suppose:
@@ -528,7 +527,7 @@ do not emit only write-events, which means that memories might not agree on the 
 they do not emit any visible events in the trace.
 
 Basic-bridge is the main lemma: it states that in-between two basic-bridges of two executions of
-same length, the final command is the same, the final memory agree on publics, and
+same length, the final command is the same, the final memory agree on public, and
 public traces are the same for both execution.
 It holds because \instruction{fill in}.
 
@@ -618,8 +617,15 @@ We have formalized the type-system in Coq, but the formalization does not includ
 \paragraph{Incomplete type-system}
 The type-system that we defined actually does not include the typing rule for the While
 command.
-\instruction{why not ? what was the problem precisely ? Impossible to prove the type\_flows\_gen,
-  which is required to prove auxiliary adequacy language theorem }
+The main reason is that, to prove the \emph{preservation lemma}~\ref{thm:preservation}, we need an
+intermediate lemma\footnotemark[2] stating that, for all well-typed command, (1) the starting typing
+context can flows from a more relaxed typing context and (2) the ending typing context can flows to
+a stricter typing context. This is required, for instance, to prove the If case, where the exit
+context is flows from the two inductive cases (as it is a join).
+However, the aforementioned lemma seems to not be true in the case of While. Indeed, the inductive
+case gives a typing context that is more relaxed than the typing context used for the body of the
+loop, but it has not necessarily any relation with the typing context of the While.
+\footnotetext[2]{In the Coq development, the lemma is named typecheck\_flow\_gen}
 
 \paragraph{Incomplete proof}
 Even without the While typing rule, we actually didn't manage to terminate the proof.
