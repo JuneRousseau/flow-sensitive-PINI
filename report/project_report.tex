@@ -716,7 +716,41 @@ do
 done
 output(public, y);
 \end{Verbatim}
-\instruction{Another examples}
+
+\paragraph{Example 1}
+\begin{Verbatim}[samepage=true]
+input(secret, x) ;
+x := 0 ;
+output(public, 0)
+\end{Verbatim}
+
+\paragraph{Example 2}
+\begin{Verbatim}[samepage=true]
+input(secret, x) ;
+if x then y else skip ;
+output(secret, y);
+y := 0 ;
+output(public, y)
+\end{Verbatim}
+
+\paragraph{Example 3}
+\begin{Verbatim}[samepage=true]
+input(secret, x) ;
+while x:
+do
+   x := x - 1 ;
+   input(y, secret) ;
+done
+output(public, 0)
+\end{Verbatim}
+
+\paragraph{Example 4}
+\begin{Verbatim}[samepage=true]
+input(secret, x) ;
+input(public, x) ;
+output(public, x)
+\end{Verbatim}
+
 
 \section{Operational Semantic \whilelang}%
 \input{figures/lang_opsem}
