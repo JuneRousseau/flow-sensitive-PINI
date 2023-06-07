@@ -364,7 +364,7 @@ Figure~\ref{fig:lang_aux_opsem}.
 We also define a typing judgment for the auxiliary language of jcommands, which refines the typing judgment of
 commands.
 
-The judgement \( \typingaux{\ctx}{\lpc}{j}{\ctx'}{\lpc'} \) states that jcommand \( j \) is well-typed in context \( \ctx \) and under guards \( \lpc \), and after its full execution, the context will be \( \ctx' \) and the list of guards will be \( \lpc' \). The apparition of \( \lpc' \) here is simply to reflect that in general, when executing an arbitrary jcommand \( j \), there might not be Join commands matching all Ifs. We can however show that for all command \( c \), if \( \typingaux{\ctx}{\lpc}{\compile{c}}{\ctx'}{\lpc'} \), then \( \lpc = \lpc' \), which justifies why the original WHILE language's type system does not need to have \( \pc \) on the right had side.
+The judgement \( \typingaux{\ctx}{\lpc}{j}{\ctx'}{\lpc'} \) states that jcommand \( j \) is well-typed in context \( \ctx \) and under guards \( \lpc \), and after its full execution, the context will be \( \ctx' \) and the list of guards will be \( \lpc' \). The apparition of \( \lpc' \) here is simply to reflect that in general, when executing an arbitrary jcommand \( j \), there might not be Join commands matching all Ifs. We can however show that for all command \( c \), if \( \typingaux{\ctx}{\lpc}{\compile{c}}{\ctx'}{\lpc'} \), then \( \lpc = \lpc' \), which justifies why the original WHILE language's type system does not need to have \( \pc \) on the right hand side.
 
 %First, the typing judgment captures the pc after the execution of the jcommand. Then, as the pc
 %is now an history of pc, all conditions over the pc takes the join of the history. The operation are
